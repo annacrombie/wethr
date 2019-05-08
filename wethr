@@ -11,25 +11,64 @@ log_() {
   fi
 }
 
+profile_() {
+  [[ $w_prof != true ]] && return
+  for secs nsecs in $epochtime; do
+    print -v ns -f "%11d" $(((secs-lpf[1])*1000000000+(nsecs-lpf[2])))
+    log_ "[\e[32mprof\e[0m] [${ns}ns] $@"
+    lpf=($secs $nsecs)
+  done
+}
+
+log_debug_() {
+  [[ $w_verbose != true ]] && return
+
+  if [[ $w_color_output == true ]]; then
+    log_ "[\e[32mdebug\e[0m] $@"
+  else
+    log_ "[debug] $@"
+  fi
+}
+
 die_() {
   if [[ $w_color_output == true ]]; then
-    log_ "[\e[31;1mexiting\e[0m] $@"
+    log_ "[\e[31;1mfatal\e[0m] $@"
   else
-    log_ "[exiting] $@"
+    log_ "[fatal] $@"
   fi
+
+  log_debug_ "exiting"
   exit 1
 }
 
 get_new_weather_() {
-  local wget_opts
+  local tmp
+  local tmpfile=$(mktemp)
+  local w_api
 
   [[ -z $LATLON ]] && die_ "Please set your location in \$LATLON"
-  [[ -z $DARKSKY_API_KEY ]] && die_ "Please set \$DARKSKY_API_KEY"
-  local w_api="${w_api_base}/forecast/$DARKSKY_API_KEY/${LATLON//:/,}?$w_params"
+  [[ (-z $DARKSKY_API_KEY && -n $w_api_helper) ]] && \
+    DARKSKY_API_KEY=$(eval "$w_api_helper")
+  [[ -z $DARKSKY_API_KEY ]] && \
+    die_ "Please set \$DARKSKY_API_KEY"
 
-  [[ $w_verbose == true ]] && log_ "fetching new weather data to $w_data_file"
-  [[ $w_verbose == true ]] || wget_opts="-q"
-  wget $wget_opts -O "$w_data_file" --compression=auto "$w_api"
+
+  w_api="${w_api_base}/forecast/$DARKSKY_API_KEY/${LATLON//:/,}?$w_params"
+
+  log_debug_ "fetching new weather data to $w_data_file"
+  [[ $w_verbose == false ]] && tmp="-q"
+
+  wget $tmp -O "$tmpfile" --compression=auto "$w_api"
+  tmp=$?
+
+  if [[ $tmp -eq 0 ]]; then
+    mv "$tmpfile" "$w_data_file"
+  else
+    log_ "failed to retreive data"
+    rm "$tmpfile"
+  fi
+
+  return $tmp
 }
 
 check_update_() {
@@ -39,23 +78,13 @@ check_update_() {
   if [[ -f $w_data_file ]]; then
     zstat -H file_stats $w_data_file
     data_age=$((EPOCHSECONDS-file_stats[mtime]))
-    [[ $w_verbose == true ]] && log_ "$w_data_file is ${data_age}s old"
+    log_debug_ "$w_data_file is ${data_age}s old"
   fi
 
   if  [[ (-z $data_age || $data_age -gt $w_refresh) ]]; then
-    [[ $w_verbose == true ]] && \
-      log_ "attempting to refresh weather data (pass -k to force keeping it)"
-    get_new_weather_ || log_ "failed to fetch new weather"
+    log_debug_ "attempting to refresh weather data"
+    get_new_weather_ || log_debug_ "failed to fetch new weather"
   fi
-}
-
-profile_() {
-  [[ $w_prof != true ]] && return
-  for secs nsecs in $epochtime; do
-    print -v ns -f "%15d" $(((secs-lpf[1])*1000000000+(nsecs-lpf[2])))
-    log_ "[\e[32mprof\e[0m] [${ns}ns] $@"
-    lpf=($secs $nsecs)
-  done
 }
 
 _graph_() {
@@ -77,8 +106,7 @@ _graph_() {
   local clr
 
 
-  [[ ($w_verbose == true && $w_fast_forward == true) ]] && \
-    log_ "fast forwarding data"
+  [[ $w_fast_forward == true ]] && log_debug_ "fast forwarding data"
 
   profile_ "initialized _graph_"
   for date in $dates; do
@@ -119,7 +147,7 @@ _graph_() {
   clr=0
   for data in $w_data_to_print; do
     now=$w_title[$data]
-    [[ $w_verbose == true ]] && log_ "printing data: $data ($now)"
+    log_debug_ "printing data: $data ($now)"
 
     if [[ ($w_draw_x_axis != true && $#w_unit[$data] -ge 1) ]]; then
       now+=" ($w_unit[$data])"
@@ -131,9 +159,6 @@ _graph_() {
     profile_ "drew title"
 
     # Display plot
-    [[ $w_verbose == true ]] && \
-      log_ "parsing JSON as \`jq '.$1.data[$off:$((off+width))][] | .$w_data[$data]'\`"
-
     jq -Mr ".$1.data[$off:$((off+width))][] | .$w_data[$data]" $w_data_file | \
       plot -H $plot_height -
 
@@ -155,7 +180,7 @@ _graph_() {
     fi
 
     # Display y-axis labels
-    [[ $w_verbose == true ]] && log_ "printing labels, width: $width $#labels"
+    log_debug_ "printing labels, width: $width $#labels"
     print $labels
     profile_ "drew y-axis"
 
@@ -171,17 +196,20 @@ help_() {
   cat <<EOF
 usage: $w_name [opts] [mode]
 opts:
-  -d, --data DATA add data to display
-  -k, --keep      keep weather data even if it is stale
-  -r, --refresh   refresh weather data even if it isn't stale
-  -X, --no-x-axis disable drawing x-axis labels
-  -C, --no-color  disable color output
-  -w, --width     set output width
-  -v, --verbose   enable more output
-  -p, --profile   enable profiling output
-  --api-key KEY   set DARKSKY_API_KEY
-  --loc LAT:LONG  set your location
-  --no-ff         don't fast forward to current time
+  -d, --data DATA         add data to display
+  -k, --keep              keep weather data even if it is stale
+  -r, --refresh           refresh weather data even if it isn't stale
+  -X, --no-x-axis         disable drawing x-axis labels
+  -C, --no-color          disable color output
+  -w, --width             set output width
+  -v, --verbose           enable more output
+  -p, --profile           enable profiling output
+      --api-key KEY       set DARKSKY_API_KEY
+      --api-helper STRING set a string which will be dynamically eval'd to get
+                          the api key.  E.g.
+                          --api-helper 'pass api_keys/darksky'
+      --loc LAT:LONG      set your location
+      --no-ff             don't fast forward to current time
   -h, --help      duh
 mode:
   m, minutely     display minutely data
@@ -274,6 +302,7 @@ w_force_skip_check=false
 w_refresh=3600
 w_data_to_print=()
 w_fast_forward=true
+w_api_helper=''
 w_verbose=false
 w_prof=false
 
@@ -292,6 +321,7 @@ while [[ -n "$@" ]]; do
       w_prof=true;;
     ("--no-ff") w_fast_forward=false;;
     ("--api-key") DARKSKY_API_KEY=$2;shift;;
+    ("--api-helper") w_api_helper=$2;shift;;
     ("--loc") LATLON=$2;shift;;
     ("-d" | "--data")
       for c in ${(s::)2}; do
@@ -316,9 +346,9 @@ profile_ "parsed options"
 
 [[ $#w_data_to_print -eq 0 ]] && w_data_to_print+=t
 
-[[ $w_verbose == true ]] && log_ "w_data_to_print: ${w_data_to_print}"
-[[ $w_verbose == true ]] && log_ "w_mode: ${w_mode}"
-[[ $w_verbose == true ]] && log_ "w_data_file: ${w_data_file}"
+log_debug_ "w_data_to_print: ${w_data_to_print}"
+log_debug_ "w_mode: ${w_mode}"
+log_debug_ "w_data_file: ${w_data_file}"
 
 case $w_mode in
   ('m') _graph_ "minutely" "%-M" "%-H" 5;;
