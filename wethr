@@ -21,12 +21,15 @@ die_() {
 }
 
 get_new_weather_() {
+  local wget_opts
+
   [[ -z $LATLON ]] && die_ "Please set your location in \$LATLON"
   [[ -z $DARKSKY_API_KEY ]] && die_ "Please set \$DARKSKY_API_KEY"
   local w_api="${w_api_base}/forecast/$DARKSKY_API_KEY/${LATLON//:/,}?$w_params"
 
-  log_ "fetching new weather data to $w_data_file"
-  wget -O "$w_data_file" --compression=auto "$w_api"
+  [[ $w_verbose == true ]] && log_ "fetching new weather data to $w_data_file"
+  [[ $w_verbose == true ]] || wget_opts="-q"
+  wget $wget_opts -O "$w_data_file" --compression=auto "$w_api"
 }
 
 check_update_() {
