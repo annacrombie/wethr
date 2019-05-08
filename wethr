@@ -13,6 +13,7 @@ log_() {
 
 profile_() {
   [[ $w_prof != true ]] && return
+
   for secs nsecs in $epochtime; do
     print -v ns -f "%11d" $(((secs-lpf[1])*1000000000+(nsecs-lpf[2])))
     log_ "[\e[32mprof\e[0m] [${ns}ns] $@"
@@ -335,6 +336,7 @@ while [[ -n "$@" ]]; do
       done; shift;;
     ("h" | "hourly") w_mode=h;;
     ("m" | "minutely") w_mode=m;;
+    *) die_ "unknown option $1 (see $w_name --help)";;
   esac
   shift
 done
