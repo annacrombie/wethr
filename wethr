@@ -1,0 +1,326 @@
+#!/bin/zsh
+
+zmodload zsh/stat
+zmodload zsh/datetime
+
+log_() {
+  if [[ $w_color_output == true ]]; then
+    echo -e "[\e[35m$w_name\e[0m] $@"
+  else
+    echo -e "[$w_name] $@"
+  fi
+}
+
+die_() {
+  if [[ $w_color_output == true ]]; then
+    log_ "[\e[31;1mexiting\e[0m] $@"
+  else
+    log_ "[exiting] $@"
+  fi
+  exit 1
+}
+
+get_new_weather_() {
+  [[ -z $LATLON ]] && die_ "Please set your location in \$LATLON"
+  [[ -z $DARKSKY_API_KEY ]] && die_ "Please set \$DARKSKY_API_KEY"
+  local w_api="${w_api_base}/forecast/$DARKSKY_API_KEY/${LATLON//:/,}?$w_params"
+
+  log_ "fetching new weather data to $w_data_file"
+  wget -O "$w_data_file" --compression=auto "$w_api"
+}
+
+check_update_() {
+  local file_stats
+  local data_age
+
+  if [[ -f $w_data_file ]]; then
+    zstat -H file_stats $w_data_file
+    data_age=$((EPOCHSECONDS-file_stats[mtime]))
+    [[ $w_verbose == true ]] && log_ "$w_data_file is ${data_age}s old"
+  fi
+
+  if  [[ (-z $data_age || $data_age -gt $w_refresh) ]]; then
+    [[ $w_verbose == true ]] && \
+      log_ "attempting to refresh weather data (pass -k to force keeping it)"
+    get_new_weather_ || log_ "failed to fetch new weather"
+  fi
+}
+
+profile_() {
+  [[ $w_prof != true ]] && return
+  for secs nsecs in $epochtime; do
+    print -v ns -f "%15d" $(((secs-lpf[1])*1000000000+(nsecs-lpf[2])))
+    log_ "[\e[32mprof\e[0m] [${ns}ns] $@"
+    lpf=($secs $nsecs)
+  done
+}
+
+_graph_() {
+  profile_ "started _graph_"
+  local dates=($(jq -Mr ".$1.data[] | .time" $w_data_file))
+  profile_ "grabbed dates"
+  local labels
+  local start=16
+  local plot_height=16
+  local width=$((w_output_width-start))
+  print -v labels -f "%-$((start-3))s" ""
+
+  local date
+  local i=0
+  local now=$EPOCHSECONDS
+  local off=0
+  local tmp=0
+  local val
+  local clr
+
+
+  [[ ($w_verbose == true && $w_fast_forward == true) ]] && \
+    log_ "fast forwarding data"
+
+  profile_ "initialized _graph_"
+  for date in $dates; do
+    if [[ (($w_fast_forward == true && $date -lt $now)) ]]; then
+      off=$((off+1))
+      continue
+    fi
+
+    if [[ $((i%$4)) -eq 0 ]]; then
+      strftime -s val "$2" $date
+
+      if [[ $((val%$4)) -ne 0 ]]; then
+        labels+=" "
+        continue
+      fi
+
+      if [[ $val -eq 0 ]]; then
+        strftime -s val "$3" $date
+        clr=35
+      else
+        clr=0
+      fi
+
+      [[ ($w_color_output == true && $clr -ne $tmp) ]] && labels+="\e[${clr}m"
+      print -v val -f "%-${4}s" $val
+      labels+=$val
+      tmp=$clr
+    fi
+
+    i=$((i+1))
+    [[ $i -ge $width ]] && break
+  done
+  [[ $off -ge $#dates ]] && die_ "no data"
+  [[ ($w_color_output == true && $clr -ne 0) ]] && labels+="\e[0m"
+  profile_ "generated y-axis labels"
+
+
+  clr=0
+  for data in $w_data_to_print; do
+    now=$w_title[$data]
+    [[ $w_verbose == true ]] && log_ "printing data: $data ($now)"
+
+    if [[ ($w_draw_x_axis != true && $#w_unit[$data] -ge 1) ]]; then
+      now+=" ($w_unit[$data])"
+    fi
+
+    # Display centered title
+    tmp=$(((w_output_width-$#now)/2))
+    print -f "%${tmp}s%s\n" "" $now
+    profile_ "drew title"
+
+    # Display plot
+    [[ $w_verbose == true ]] && \
+      log_ "parsing JSON as \`jq '.$1.data[$off:$((off+width))][] | .$w_data[$data]'\`"
+
+    jq -Mr ".$1.data[$off:$((off+width))][] | .$w_data[$data]" $w_data_file | \
+      plot -H $plot_height -
+
+    profile_ "drew plot"
+
+    if [[ $w_draw_x_axis == true ]]; then
+      # Display x-axis labels
+      tmp=$((plot_height-((plot_height-$#w_unit_long[$data])/2)))
+      echo -n "\e[${tmp}A\e[3C"
+      i=0
+      for c in ${(s::)w_unit_long[$data]}; do
+        echo -n "${c}\e[1B\e[1D"
+        i=$((i+1))
+      done
+
+      echo -n "\e[$((tmp-i))B\e[3D"
+
+      profile_ "drew x-axis"
+    fi
+
+    # Display y-axis labels
+    [[ $w_verbose == true ]] && log_ "printing labels, width: $width $#labels"
+    print $labels
+    profile_ "drew y-axis"
+
+
+    clr=$((clr+1))
+    [[ $clr -lt $#w_data_to_print ]] && echo
+  done
+}
+
+help_() {
+  local key
+
+  cat <<EOF
+usage: $w_name [opts] [mode]
+opts:
+  -d, --data DATA add data to display
+  -k, --keep      keep weather data even if it is stale
+  -r, --refresh   refresh weather data even if it isn't stale
+  -X, --no-x-axis disable drawing x-axis labels
+  -C, --no-color  disable color output
+  -w, --width     set output width
+  -v, --verbose   enable more output
+  -p, --profile   enable profiling output
+  --api-key KEY   set DARKSKY_API_KEY
+  --loc LAT:LONG  set your location
+  --no-ff         don't fast forward to current time
+  -h, --help      duh
+mode:
+  m, minutely     display minutely data
+  h, hourly       display hourly data
+
+DATA:
+EOF
+  for key _ in ${(kv)w_data}; do
+    print -f "  %s - %s (%s)\n" $key "$w_title[$key]" "$w_unit_long[$key]"
+  done
+}
+
+typeset -A w_data
+w_data[a]="apparentTemperature"
+w_data[b]="windBearing"
+w_data[c]="cloudCover*100"
+w_data[d]="dewPoint"
+w_data[g]="windGust"
+w_data[h]="humidity*100"
+w_data[i]="precipIntensity"
+w_data[o]="ozone"
+w_data[p]="precipProbability*100"
+w_data[P]="pressure"
+w_data[t]="temperature"
+w_data[u]="uvIndex"
+w_data[v]="visibility"
+w_data[w]="windSpeed"
+typeset -A w_title
+w_title[a]="Feels Like"
+w_title[b]="Wind Bearing"
+w_title[c]="Cloud Cover"
+w_title[d]="Dew Point"
+w_title[g]="Wind Gust"
+w_title[h]="Humidity"
+w_title[i]="Precip. Intensity"
+w_title[o]="Ozone"
+w_title[p]="Precip. Probability"
+w_title[P]="Atmospheric Pressure"
+w_title[t]="Temperature"
+w_title[u]="UV Index"
+w_title[v]="Visibility"
+w_title[w]="Wind Speed"
+typeset -A w_unit
+w_unit[a]="°C"
+w_unit[b]="°"
+w_unit[c]="%"
+w_unit[d]="°C"
+w_unit[g]="m/s"
+w_unit[h]="%"
+w_unit[i]="mm/h"
+w_unit[o]="DU"
+w_unit[p]="%"
+w_unit[P]="hPa"
+w_unit[t]="°C"
+w_unit[u]=""
+w_unit[v]="km"
+w_unit[w]="m/s"
+typeset -A w_unit_long
+w_unit_long[a]="Degrees C"
+w_unit_long[b]="Degrees"
+w_unit_long[c]="Percent"
+w_unit_long[d]="Degrees C"
+w_unit_long[g]=$w_unit[g]
+w_unit_long[h]="Percent"
+w_unit_long[i]=$w_unit[i]
+w_unit_long[o]="Dobson Units"
+w_unit_long[p]="Percent"
+w_unit_long[P]="hPa"
+w_unit_long[t]="Degrees C"
+w_unit_long[u]="Index"
+w_unit_long[v]=$w_unit[v]
+w_unit_long[w]=$w_unit[w]
+
+# api settings
+w_api_base="https://api.darksky.net"
+w_data_file="$XDG_CACHE_HOME/weather.json"
+w_params="units=si&lang=en&extend=hourly"
+
+# output settings
+w_draw_x_axis=false
+[[ -t 1 ]] && w_draw_x_axis=true
+w_color_output=true
+w_output_width=$COLUMNS
+
+# behavior
+w_name="wethr"
+w_mode=h
+w_force_refresh=false
+w_force_skip_check=false
+w_refresh=3600
+w_data_to_print=()
+w_fast_forward=true
+w_verbose=false
+w_prof=false
+
+while [[ -n "$@" ]]; do
+  case $1 in
+    ("-h" | "--help") help_;exit ;;
+    ("-r" | "--refresh") w_force_refresh=true;;
+    ("-k" | "--keep") w_force_skip_check=true;;
+    ("-X" | "--no-x-axis") w_draw_x_axis=false;;
+    ("-C" | "--no-color") w_color_output=false;;
+    ("-w" | "--width") w_output_width=$2;shift;;
+    ("-v" | "--verbose") w_verbose=true;;
+    ("-p" | "--profile")
+      zmodload zsh/zprof
+      lpf=("${epochtime[@]}")
+      w_prof=true;;
+    ("--no-ff") w_fast_forward=false;;
+    ("--api-key") DARKSKY_API_KEY=$2;shift;;
+    ("--loc") LATLON=$2;shift;;
+    ("-d" | "--data")
+      for c in ${(s::)2}; do
+        case $c in
+          ('.')
+            for key _ in ${(kv)w_data}; do
+              w_data_to_print+=$key
+            done;;
+          *) w_data_to_print+=$c;;
+        esac
+      done; shift;;
+    ("h" | "hourly") w_mode=h;;
+    ("m" | "minutely") w_mode=m;;
+  esac
+  shift
+done
+
+profile_ "parsed options"
+
+[[ $w_force_refresh == true ]] && get_new_weather_
+[[ $w_force_skip_check == false ]] && check_update_
+
+[[ $#w_data_to_print -eq 0 ]] && w_data_to_print+=t
+
+[[ $w_verbose == true ]] && log_ "w_data_to_print: ${w_data_to_print}"
+[[ $w_verbose == true ]] && log_ "w_mode: ${w_mode}"
+[[ $w_verbose == true ]] && log_ "w_data_file: ${w_data_file}"
+
+case $w_mode in
+  ('m') _graph_ "minutely" "%-M" "%-H" 5;;
+  ('h') _graph_ "hourly" "%-H" "%-a" 4;;
+esac
+
+[[ $w_prof == true ]] && zprof
+exit 0
