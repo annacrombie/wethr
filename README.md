@@ -1,6 +1,6 @@
 # wethr
 
-[wethr](screenshot.png)
+![wethr](screenshot.png)
 
 Simple command line weather, built with performance and simplicity in mind.
 Powered by [Darksky](https://darksky.net/dev), `wethr` will only re-download
