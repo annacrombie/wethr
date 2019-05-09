@@ -99,10 +99,11 @@ _graph_() {
   local dates=($(jq -Mr ".$1.data[] | .time" $w_data_file))
   profile_ "grabbed dates"
   local labels
-  local start=16
+  local start=12
   local plot_height=16
-  local width=$((w_output_width-start))
-  print -v labels -f "%-$((start-3))s" ""
+  local width=$((w_output_width-start-3))
+  [[ $width -ge $#dates ]] && width=$#dates
+  print -v labels -f "%-$((start+1))s" ""
 
   local date
   local i=0
@@ -161,7 +162,7 @@ _graph_() {
     fi
 
     # Display centered title
-    tmp=$(((w_output_width-$#now)/2))
+    tmp=$((start+((width-off)-$#now)/2))
     print -f "%${tmp}s%s\n" "" $now
     profile_ "drew title"
 
