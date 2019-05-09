@@ -357,7 +357,7 @@ while [[ -n "$@" ]]; do
 done
 
 mkdir -p "$w_data_dir"
-w_data_file="$w_data_dir/cache/$LATLON"
+w_data_file="$w_data_dir/$LATLON"
 log_debug_ "w_data_file: ${w_data_file}"
 
 profile_ "parsed options"
