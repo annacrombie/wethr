@@ -39,6 +39,7 @@ die_() {
   fi
 
   log_debug_ "exiting"
+  [[ $w_prof == true ]] && zprof
   exit 1
 }
 
