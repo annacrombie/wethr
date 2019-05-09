@@ -80,6 +80,8 @@ check_update_() {
     zstat -H file_stats $w_data_file
     data_age=$((EPOCHSECONDS-file_stats[mtime]))
     log_debug_ "$w_data_file is ${data_age}s old"
+  else
+    log_debug_ "$w_data_file does not exist"
   fi
 
   if  [[ (-z $data_age || $data_age -gt $w_refresh) ]]; then
@@ -284,10 +286,21 @@ w_unit_long[u]="Index"
 w_unit_long[v]=$w_unit[v]
 w_unit_long[w]=$w_unit[w]
 
+# name
+w_name="wethr"
+
 # api settings
 w_api_base="https://api.darksky.net"
-w_data_file="$XDG_CACHE_HOME/weather.json"
 w_params="units=si&lang=en&extend=hourly&exclude=currently,daily,alerts,flags"
+
+# cache settings
+if [[ -n "$XDG_DATA_HOME" ]]; then
+  w_data_dir="$XDG_DATA_HOME/$w_name"
+else
+  w_data_dir="$HOME/.local/share/$w_name"
+fi
+
+w_refresh=3600
 
 # output settings
 w_draw_x_axis=false
@@ -296,11 +309,9 @@ w_color_output=true
 w_output_width=$COLUMNS
 
 # behavior
-w_name="wethr"
 w_mode=h
 w_force_refresh=false
 w_force_skip_check=false
-w_refresh=3600
 w_data_to_print=()
 w_fast_forward=true
 w_api_helper=''
@@ -341,6 +352,10 @@ while [[ -n "$@" ]]; do
   shift
 done
 
+mkdir -p "$w_data_dir"
+w_data_file="$w_data_dir/cache/$LATLON"
+log_debug_ "w_data_file: ${w_data_file}"
+
 profile_ "parsed options"
 
 [[ $w_force_refresh == true ]] && get_new_weather_
@@ -350,7 +365,6 @@ profile_ "parsed options"
 
 log_debug_ "w_data_to_print: ${w_data_to_print}"
 log_debug_ "w_mode: ${w_mode}"
-log_debug_ "w_data_file: ${w_data_file}"
 
 case $w_mode in
   ('m') _graph_ "minutely" "%-M" "%-H" 5;;
