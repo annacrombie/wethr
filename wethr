@@ -287,7 +287,7 @@ w_unit_long[w]=$w_unit[w]
 # api settings
 w_api_base="https://api.darksky.net"
 w_data_file="$XDG_CACHE_HOME/weather.json"
-w_params="units=si&lang=en&extend=hourly"
+w_params="units=si&lang=en&extend=hourly&exclude=currently,daily,alerts,flags"
 
 # output settings
 w_draw_x_axis=false
