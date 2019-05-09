@@ -199,34 +199,33 @@ _graph_() {
 
 help_() {
   local key
+  local options=""
+  local data=""
+  local tmp
+
+  for key _ in ${(kv)w_shortopts}; do
+    print -v tmp -f "  -%s, --%s\n" $key "$w_shortopts[$key]"
+    options+="$tmp"
+  done
+  for key _ in ${(kv)w_data}; do
+    print -v tmp -f "  %s - %s (%s)\n" $key "$w_title[$key]" "$w_unit_long[$key]"
+    data+="$tmp"
+  done
 
   cat <<EOF
-usage: $w_name [opts] [mode]
-opts:
-  -d, --data DATA         add data to display
-  -k, --keep              keep weather data even if it is stale
-  -r, --refresh           refresh weather data even if it isn't stale
-  -X, --no-x-axis         disable drawing x-axis labels
-  -C, --no-color          disable color output
-  -w, --width             set output width
-  -v, --verbose           enable more output
-  -p, --profile           enable profiling output
-      --api-key KEY       set DARKSKY_API_KEY
-      --api-helper STRING set a string which will be dynamically eval'd to get
-                          the api key.  E.g.
-                          --api-helper 'pass api_keys/darksky'
-      --loc LAT:LONG      set your location
-      --no-ff             don't fast forward to current time
-  -h, --help      duh
-mode:
-  m, minutely     display minutely data
-  h, hourly       display hourly data
+$w_name $w_version
+Simple command line weather
+Powered by Dark Sky <https://darksky.net/poweredby/>
 
+Usage: $w_name [MODE] [OPTS]
+OPTS:
+$options
 DATA:
+$data
+MODE:
+  m, minutely
+  h, hourly
 EOF
-  for key _ in ${(kv)w_data}; do
-    print -f "  %s - %s (%s)\n" $key "$w_title[$key]" "$w_unit_long[$key]"
-  done
 }
 
 typeset -A w_data
@@ -292,6 +291,7 @@ w_unit_long[w]=$w_unit[w]
 
 # name
 w_name="wethr"
+w_version="0.1.0"
 
 # api settings
 w_api_base="https://api.darksky.net"
@@ -321,25 +321,47 @@ w_fast_forward=true
 w_api_helper=''
 w_verbose=false
 w_prof=false
+w_default_setting=true
 
-while [[ -n "$@" ]]; do
+typeset -A w_shortopts
+w_shortopts[C]=no-color
+w_shortopts[F]=no-fast-forward
+w_shortopts[K]=api-helper
+w_shortopts[R]=no-refresh
+w_shortopts[X]=no-x-axis
+w_shortopts[c]=color
+w_shortopts[d]=data
+w_shortopts[f]=fast-forward
+w_shortopts[h]=help
+w_shortopts[k]=api-key
+w_shortopts[l]=loc
+w_shortopts[p]=profile
+w_shortopts[r]=refresh
+w_shortopts[v]=verbose
+w_shortopts[V]=version
+w_shortopts[w]=width
+w_shortopts[x]=x-axis
+
+process_longopt_() {
   case $1 in
-    ("-h" | "--help") help_;exit ;;
-    ("-r" | "--refresh") w_force_refresh=true;;
-    ("-k" | "--keep") w_force_skip_check=true;;
-    ("-X" | "--no-x-axis") w_draw_x_axis=false;;
-    ("-C" | "--no-color") w_color_output=false;;
-    ("-w" | "--width") w_output_width=$2;shift;;
-    ("-v" | "--verbose") w_verbose=true;;
-    ("-p" | "--profile")
+    no-*) w_default_setting=false; process_longopt_ "${1##no-}";;
+    ("help") help_;exit ;;
+    ("version") print "$w_name $w_version";exit ;;
+    ("refresh") w_force_refresh=true;;
+    ("keep") w_force_skip_check=true;;
+    ("no-x-axis") w_draw_x_axis=false;;
+    ("no-color") w_color_output=false;;
+    ("width") w_output_width=$2;w_shift_amnt=1;;
+    ("verbose") w_verbose=true;;
+    ("profile")
       zmodload zsh/zprof
       lpf=("${epochtime[@]}")
       w_prof=true;;
-    ("--no-ff") w_fast_forward=false;;
-    ("--api-key") DARKSKY_API_KEY=$2;shift;;
-    ("--api-helper") w_api_helper=$2;shift;;
-    ("--loc") LATLON=$2;shift;;
-    ("-d" | "--data")
+    ("no-fast-forward") w_fast_forward=false;;
+    ("api-key") DARKSKY_API_KEY=$2;w_shift_amnt=1;;
+    ("api-helper") w_api_helper=$2;w_shift_amnt=1;;
+    ("loc") LATLON=$2;w_shift_amnt=1;;
+    ("data")
       for c in ${(s::)2}; do
         case $c in
           ('.')
@@ -348,7 +370,27 @@ while [[ -n "$@" ]]; do
             done;;
           *) w_data_to_print+=$c;;
         esac
-      done; shift;;
+      done;
+      w_shift_amnt=1;;
+    *) die_ "unknown long option --$1"
+  esac
+}
+
+while [[ -n "$@" ]]; do
+  case $1 in
+    --*)
+      w_shift_amnt=0
+      process_longopt_ ${1##--} $2
+      shift $w_shift_amnt;;
+    -*)
+      for c in ${(s::)1##-}; do
+        w_shift_amnt=0
+
+        [[ -z $w_shortopts[$c] ]] && die_ "unknown option -$c"
+
+        process_longopt_ $w_shortopts[$c] $2
+        shift $w_shift_amnt
+      done;;
     ("h" | "hourly") w_mode=h;;
     ("m" | "minutely") w_mode=m;;
     *) die_ "unknown option $1 (see $w_name --help)";;
