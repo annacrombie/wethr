@@ -86,7 +86,10 @@ check_update_() {
 
   if  [[ (-z $data_age || $data_age -gt $w_refresh) ]]; then
     log_debug_ "attempting to refresh weather data"
-    get_new_weather_ || log_debug_ "failed to fetch new weather"
+    get_new_weather_
+    if [[ ($? -ne 0 && ! -f $w_data_file) ]]; then
+      die_ "no data"
+    fi
   fi
 }
 
