@@ -338,7 +338,7 @@ w_color_output=true
 w_output_width=$COLUMNS
 
 # behavior
-w_mode=h
+w_mode=hourly
 w_force_refresh=false
 w_force_skip_check=false
 w_data_to_print=()
@@ -419,7 +419,7 @@ profile_ "parsed options"
 [[ $w_force_refresh == true ]] && get_new_weather_
 [[ $w_force_skip_check == false ]] && check_update_
 
-[[ $#w_data_to_print -eq 0 ]] && w_data_to_print+=t
+[[ $#w_data_to_print -eq 0 ]] && w_data_to_print+=p
 
 log_debug_ "w_data_to_print: ${w_data_to_print}"
 log_debug_ "w_mode: ${w_mode}"
