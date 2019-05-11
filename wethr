@@ -322,7 +322,6 @@ w_fast_forward=true
 w_api_helper=''
 w_verbose=false
 w_prof=false
-w_default_setting=true
 
 typeset -A w_shortopts
 w_shortopts[C]=no-color
@@ -345,12 +344,13 @@ w_shortopts[x]=x-axis
 
 process_longopt_() {
   case $1 in
-    no-*) w_default_setting=false; process_longopt_ "${1##no-}";;
     ("help") help_;exit ;;
     ("version") print "$w_name $w_version";exit ;;
     ("refresh") w_force_refresh=true;;
-    ("keep") w_force_skip_check=true;;
+    ("no-refresh") w_force_skip_check=true;;
+    ("x-axis") w_draw_x_axis=true;;
     ("no-x-axis") w_draw_x_axis=false;;
+    ("color") w_color_output=true;;
     ("no-color") w_color_output=false;;
     ("width") w_output_width=$2;w_shift_amnt=1;;
     ("verbose") w_verbose=true;;
@@ -358,6 +358,7 @@ process_longopt_() {
       zmodload zsh/zprof
       lpf=("${epochtime[@]}")
       w_prof=true;;
+    ("fast-forward") w_fast_forward=true;;
     ("no-fast-forward") w_fast_forward=false;;
     ("api-key") DARKSKY_API_KEY=$2;w_shift_amnt=1;;
     ("api-helper") w_api_helper=$2;w_shift_amnt=1;;
