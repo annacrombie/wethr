@@ -229,6 +229,8 @@ DATA:
 $data
 MODE:
 $mode
+Try:
+$ wethr hourly -d tpic
 EOF
 }
 
