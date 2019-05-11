@@ -201,15 +201,20 @@ help_() {
   local key
   local options=""
   local data=""
+  local mode=""
   local tmp
 
-  for key _ in ${(kv)w_shortopts}; do
+  for key in ${(ki)w_shortopts}; do
     print -v tmp -f "  -%s, --%s\n" $key "$w_shortopts[$key]"
     options+="$tmp"
   done
-  for key _ in ${(kv)w_data}; do
+  for key in ${(ki)w_data}; do
     print -v tmp -f "  %s - %s (%s)\n" $key "$w_title[$key]" "$w_unit_long[$key]"
     data+="$tmp"
+  done
+  for key in ${(ki)w_modes}; do
+    print -v tmp -f "  %s, %s\n" $key "$w_modes[$key]"
+    mode+="$tmp"
   done
 
   cat <<EOF
@@ -223,8 +228,7 @@ $options
 DATA:
 $data
 MODE:
-  m, minutely
-  h, hourly
+$mode
 EOF
 }
 
@@ -252,8 +256,8 @@ w_title[g]="Wind Gust"
 w_title[h]="Humidity"
 w_title[i]="Precip. Intensity"
 w_title[o]="Ozone"
-w_title[p]="Precip. Probability"
 w_title[P]="Atmospheric Pressure"
+w_title[p]="Precip. Probability"
 w_title[t]="Temperature"
 w_title[u]="UV Index"
 w_title[v]="Visibility"
@@ -282,12 +286,33 @@ w_unit_long[g]=$w_unit[g]
 w_unit_long[h]="Percent"
 w_unit_long[i]=$w_unit[i]
 w_unit_long[o]="Dobson Units"
-w_unit_long[p]="Percent"
 w_unit_long[P]="hPa"
+w_unit_long[p]="Percent"
 w_unit_long[t]="Degrees C"
 w_unit_long[u]="Index"
 w_unit_long[v]=$w_unit[v]
 w_unit_long[w]=$w_unit[w]
+typeset -A w_shortopts
+w_shortopts[c]=color
+w_shortopts[C]=no-color
+w_shortopts[d]=data
+w_shortopts[f]=fast-forward
+w_shortopts[F]=no-fast-forward
+w_shortopts[h]=help
+w_shortopts[K]=api-helper
+w_shortopts[k]=api-key
+w_shortopts[l]=loc
+w_shortopts[p]=profile
+w_shortopts[R]=no-refresh
+w_shortopts[r]=refresh
+w_shortopts[v]=verbose
+w_shortopts[V]=version
+w_shortopts[w]=width
+w_shortopts[X]=no-x-axis
+w_shortopts[x]=x-axis
+typeset -A w_modes
+w_modes[h]=hourly
+w_modes[m]=minutely
 
 # name
 w_name="wethr"
@@ -321,25 +346,8 @@ w_fast_forward=true
 w_api_helper=''
 w_verbose=false
 w_prof=false
-
-typeset -A w_shortopts
-w_shortopts[C]=no-color
-w_shortopts[F]=no-fast-forward
-w_shortopts[K]=api-helper
-w_shortopts[R]=no-refresh
-w_shortopts[X]=no-x-axis
-w_shortopts[c]=color
-w_shortopts[d]=data
-w_shortopts[f]=fast-forward
-w_shortopts[h]=help
-w_shortopts[k]=api-key
-w_shortopts[l]=loc
-w_shortopts[p]=profile
-w_shortopts[r]=refresh
-w_shortopts[v]=verbose
-w_shortopts[V]=version
-w_shortopts[w]=width
-w_shortopts[x]=x-axis
+w_plot_color=35
+w_plot_height=16
 
 process_longopt_() {
   case $1 in
@@ -392,9 +400,12 @@ while [[ -n "$@" ]]; do
         process_longopt_ $w_shortopts[$c] $2
         shift $w_shift_amnt
       done;;
-    ("h" | "hourly") w_mode=h;;
-    ("m" | "minutely") w_mode=m;;
-    *) die_ "unknown option $1 (see $w_name --help)";;
+    *)
+      if [[ -n $w_modes[$1] ]]; then
+        w_mode=$w_modes[$1]
+      else
+        w_mode=$1
+      fi;;
   esac
   shift
 done
@@ -414,8 +425,9 @@ log_debug_ "w_data_to_print: ${w_data_to_print}"
 log_debug_ "w_mode: ${w_mode}"
 
 case $w_mode in
-  ('m') _graph_ "minutely" "%-M" "%-H" 5;;
-  ('h') _graph_ "hourly" "%-H" "%-a" 4;;
+  ('minutely') _graph_ "minutely" "%-M" "%-H" 5;;
+  ('hourly') _graph_ "hourly" "%-H" "%-a" 4;;
+  *) die_ "unknown mode '$w_mode'";;
 esac
 
 [[ $w_prof == true ]] && zprof
