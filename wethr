@@ -103,7 +103,7 @@ _graph_() {
   local width=$((w_output_width-(start+3)))
   [[ $width -ge $#dates ]] && width=$#dates
   print -v labels -f "%-$((start+1))s" ""
-
+  local units_on_side
   local date
   local i=0
   local now=$EPOCHSECONDS
@@ -153,15 +153,23 @@ _graph_() {
 
   clr=0
   for data in $w_data_to_print; do
+    if [[ ($w_draw_x_axis != true || $#w_unit_long[$data] -ge $w_plot_height) ]]; then
+      units_on_side=false
+    else
+      units_on_side=true
+    fi
+
     now=$w_title[$data]
     log_debug_ "printing data: $data ($now)"
 
-    if [[ ($w_draw_x_axis != true && $#w_unit[$data] -ge 1) ]]; then
+    if [[ ($units_on_side == false && $#w_unit[$data] -ge 1) ]]; then
       now+=" ($w_unit[$data])"
     fi
 
     # Display centered title
-    tmp=$((start+(($#dates-off)-$#now)/2))
+    tmp=$(($#dates-off))
+    [[ $tmp -gt $width ]] && tmp=$width
+    tmp=$((start+((width)-$#now)/2))
     print -f "%${tmp}s%s\n" "" $now
     profile_ "drew title"
 
@@ -171,7 +179,7 @@ _graph_() {
 
     profile_ "drew plot"
 
-    if [[ $w_draw_x_axis == true ]]; then
+    if [[ $units_on_side == true ]]; then
       # Display x-axis labels
       tmp=$((w_plot_height-((w_plot_height-$#w_unit_long[$data])/2)))
       echo -n "\e[${tmp}A\e[3C"
@@ -300,6 +308,7 @@ w_shortopts[C]=no-color
 w_shortopts[d]=data
 w_shortopts[f]=fast-forward
 w_shortopts[F]=no-fast-forward
+w_shortopts[g]=plot-height
 w_shortopts[h]=help
 w_shortopts[K]=api-helper
 w_shortopts[k]=api-key
@@ -352,6 +361,7 @@ w_plot_color=35
 w_plot_height=16
 
 process_longopt_() {
+  local tmp
   case $1 in
     ("help") help_;exit ;;
     ("version") print "$w_name $w_version";exit ;;
@@ -363,6 +373,10 @@ process_longopt_() {
     ("no-color") w_plot_color=0; w_color_output=false;;
     ("width") w_output_width=$2;w_shift_amnt=1;;
     ("verbose") w_verbose=true;;
+    ("plot-height")
+      tmp=$(($2+0))
+      [[ $tmp -ge 1 ]] && w_plot_height=$tmp
+      w_shift_amnt=1;;
     ("profile")
       zmodload zsh/zprof
       lpf=("${epochtime[@]}")
