@@ -100,8 +100,7 @@ _graph_() {
   profile_ "grabbed dates"
   local labels
   local start=12
-  local plot_height=16
-  local width=$((w_output_width-start-3))
+  local width=$((w_output_width-(start+3)))
   [[ $width -ge $#dates ]] && width=$#dates
   print -v labels -f "%-$((start+1))s" ""
 
@@ -162,19 +161,19 @@ _graph_() {
     fi
 
     # Display centered title
-    tmp=$((start+((width-off)-$#now)/2))
+    tmp=$((start+(($#dates-off)-$#now)/2))
     print -f "%${tmp}s%s\n" "" $now
     profile_ "drew title"
 
     # Display plot
     jq -Mr ".$1.data[$off:$((off+width))][] | .$w_data[$data]" $w_data_file | \
-      plot -H $plot_height -
+      plot -c $w_plot_color -H $w_plot_height -
 
     profile_ "drew plot"
 
     if [[ $w_draw_x_axis == true ]]; then
       # Display x-axis labels
-      tmp=$((plot_height-((plot_height-$#w_unit_long[$data])/2)))
+      tmp=$((w_plot_height-((w_plot_height-$#w_unit_long[$data])/2)))
       echo -n "\e[${tmp}A\e[3C"
       i=0
       for c in ${(s::)w_unit_long[$data]}; do
