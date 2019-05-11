@@ -358,7 +358,7 @@ process_longopt_() {
     ("x-axis") w_draw_x_axis=true;;
     ("no-x-axis") w_draw_x_axis=false;;
     ("color") w_color_output=true;;
-    ("no-color") w_color_output=false;;
+    ("no-color") w_plot_color=0; w_color_output=false;;
     ("width") w_output_width=$2;w_shift_amnt=1;;
     ("verbose") w_verbose=true;;
     ("profile")
