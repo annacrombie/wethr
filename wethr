@@ -111,7 +111,7 @@ _graph_() {
   local tmp=0
   local val
   local clr
-
+  local pad
 
   [[ $w_fast_forward == true ]] && log_debug_ "fast forwarding data"
 
@@ -138,7 +138,9 @@ _graph_() {
       fi
 
       [[ ($w_color_output == true && $clr -ne $tmp) ]] && labels+="\e[${clr}m"
-      print -v val -f "%-${4}s" $val
+      pad=$4
+      [[ $((i+$4)) -gt $width ]] && pad=$((width-(i+$4)))
+      print -v val -f "%-${pad}s" $val
       labels+=$val
       tmp=$clr
     fi
