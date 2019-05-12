@@ -175,6 +175,9 @@ _graph_() {
     print -f "%${tmp}s%s\n" "" $now
     profile_ "drew title"
 
+    [[ $w_verbose == true ]] && \
+      print -f "^%$((start-1))s|%${width}s$\n" "start" "width"
+
     # Display plot
     jq -Mr ".$1.data[$off:$((off+width))][] | .$w_data[$data]" $w_data_file | \
       plot -c $w_plot_color -H $w_plot_height -
