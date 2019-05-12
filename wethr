@@ -148,10 +148,10 @@ _graph_() {
     i=$((i+1))
     [[ $i -ge $width ]] && break
   done
+
   [[ $off -ge $#dates ]] && die_ "no data"
   [[ ($w_color_output == true && $clr -ne 0) ]] && labels+="\e[0m"
   profile_ "generated y-axis labels"
-
 
   clr=0
   for data in $w_data_to_print; do
