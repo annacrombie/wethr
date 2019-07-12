@@ -43,19 +43,24 @@ die_() {
   exit 1
 }
 
+get_latlon_() {
+  [[ (-z $LATLON && -n $w_loc_helper) ]] && \
+    typeset -g LATLON=$(eval "$w_loc_helper")
+  [[ -z $LATLON ]] && \
+    die_ "Please set your location in \$LATLON"
+}
+
 get_new_weather_() {
   local tmp
   local tmpfile=$(mktemp)
   local w_api
 
-  [[ -z $LATLON ]] && die_ "Please set your location in \$LATLON"
   [[ (-z $DARKSKY_API_KEY && -n $w_api_helper) ]] && \
     DARKSKY_API_KEY=$(eval "$w_api_helper")
   [[ -z $DARKSKY_API_KEY ]] && \
     die_ "Please set \$DARKSKY_API_KEY"
 
-
-  w_api="${w_api_base}/forecast/$DARKSKY_API_KEY/${LATLON//:/,}?$w_params"
+  w_api="${w_api_base}/forecast/${DARKSKY_API_KEY}/${LATLON}?$w_params"
 
   log_debug_ "fetching new weather data to $w_data_file"
   [[ $w_verbose == false ]] && tmp="-q"
@@ -318,6 +323,7 @@ w_shortopts[h]=help
 w_shortopts[K]=api-helper
 w_shortopts[k]=api-key
 w_shortopts[l]=loc
+w_shortopts[L]=loc-helper
 w_shortopts[p]=profile
 w_shortopts[R]=no-refresh
 w_shortopts[r]=refresh
@@ -391,6 +397,7 @@ process_longopt_() {
     ("api-key") DARKSKY_API_KEY=$2;w_shift_amnt=1;;
     ("api-helper") w_api_helper=$2;w_shift_amnt=1;;
     ("loc") LATLON=$2;w_shift_amnt=1;;
+    ("loc-helper") w_loc_helper=$2;w_shift_amnt=1;;
     ("data")
       for c in ${(s::)2}; do
         case $c in
@@ -430,6 +437,9 @@ while [[ -n "$@" ]]; do
   esac
   shift
 done
+
+get_latlon_
+log_debug_ "latlon: $LATLON"
 
 mkdir -p "$w_data_dir"
 w_data_file="$w_data_dir/$LATLON"
