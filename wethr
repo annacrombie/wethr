@@ -104,12 +104,13 @@ wethr -dt -da
 "
 }
 
+force_fetch=""
 data=""
 plot_args=""
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/wethr2"
 mkdir -p "$data_dir" || die "failed to create data directory"
 
-while getopts "hp:d:" opt; do
+while getopts "hp:d:f" opt; do
   case $opt in
     p)
       plot_args="$OPTARG"
@@ -117,6 +118,9 @@ while getopts "hp:d:" opt; do
     d)
       data_source "$OPTARG"
       data="$ds $data"
+      ;;
+    f)
+      force_fetch=1
       ;;
     h)
       print_usage
