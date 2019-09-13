@@ -1,5 +1,11 @@
 #!/bin/sh
 
+
+default_params="units=si&lang=en&extend=hourly&exclude=currently,daily,alerts,flags"
+params=${WETHR_PARAMS:-"$default_params"}
+api_base="https://api.darksky.net/forecast"
+endpoint="${api_base}/${DARKSKY_API_KEY}/${COORDS}?$params"
+
 die() {
   echo "$@" >&2
   exit 1
@@ -36,9 +42,6 @@ data_source() {
 }
 
 fetch_weather() {
-  [[ ! -n $COORDS ]] && die "please set COORDS"
-  [[ ! -n $DARKSKY_API_KEY ]] && die "please set DARKSKY_API_KEY"
-
   data_dir="$data_dir/$COORDS"
   mkdir -p "$data_dir"
 
@@ -48,11 +51,13 @@ fetch_weather() {
   ctime="$(date +%s)"
 
   if [[ ! -f "$data_dir/src" ]] || [[ $((ctime - last_fetch)) -gt 3600 ]]; then
-    [[ -f "$data_dir/src" ]] && rm "$data_dir/*"
+    [[ -f "$data_dir/src" ]] && rm "$data_dir/"*
 
-    params=${WETHR_PARAMS:-units=si&lang=en&extend=hourly&exclude=currently,daily,alerts,flags}
+    [[ ! -n $COORDS ]] && die "please set COORDS"
+    [[ ! -n $DARKSKY_API_KEY ]] && die "please set DARKSKY_API_KEY"
 
-    curl "https://api.darksky.net/forecast/${DARKSKY_API_KEY}/${COORDS}?$params" > "$data_dir/src" \
+    curl -sS "$endpoint" > "$data_dir/src" \
+      || [[ -f "$data_dir/src" ]] \
       || die "couldn't download data"
 
     initial_date=$(jq '.hourly.data[0].time' "$data_dir/src")
@@ -148,4 +153,4 @@ done
 
 echo
 
-plot -x 4:$hour_offset:24:r $plot_args $plot_data
+plot -x 4:$hour_offset:24:l $plot_args $plot_data
