@@ -24,15 +24,15 @@ next_color() {
 data_source() {
   case $1 in
     a) ds="apparentTemperature";;
-    b) ds="windBearing";;
+    B) ds="windBearing";;
     c) ds="cloudCover*100";;
     d) ds="dewPoint";;
-    g) ds="windGust";;
+    G) ds="windGust";;
     h) ds="humidity*100";;
-    i) ds="precipIntensity";;
+    I) ds="precipIntensity";;
     o) ds="ozone";;
     p) ds="precipProbability*100";;
-    P) ds="pressure";;
+    r) ds="pressure";;
     t) ds="temperature";;
     u) ds="uvIndex";;
     v) ds="visibility";;
@@ -74,24 +74,14 @@ EOF
 }
 
 print_usage() {
-  cat <<EOF
-usage: wethr [-h|[-d <data> [-d <data>[...]]] [-p <plot args>]
+  printf "
+usage: wethr [-h|[-r][-d <data> [-d <data>[...]]][-p <plot args>]]
 
 data:
-a - apparentTemperature
-b - windBearing
-c - cloudCover*100
-d - dewPoint
-g - windGust
-h - humidity*100
-i - precipIntensity
-o - ozone
-p - precipProbability*100
-P - pressure
-t - temperature
-u - uvIndex
-v - visibility
-w - windSpeed
+\e[1;4;36ma\e[0mpparentTemperature, wind\e[1;4;36mB\e[0mearing, \e[1;4;36mc\e[0mloudCover*100, \e[1;4;36md\e[0mewPoint,
+wind\e[1;4;36mG\e[0must, \e[1;4;36mh\e[0mumidity*100, precip\e[1;4;36mI\e[0mntensity, \e[1;4;36mo\e[0mzone,
+\e[1;4;36mp\e[0mrecipProbability*100, p\e[1;4;36mr\e[0messure, \e[1;4;36mt\e[0memperature, \e[1;4;36mu\e[0mvIndex,
+\e[1;4;36mv\e[0misibility, \e[1;4;36mw\e[0mindSpeed
 
 environment
 COORDS - lattitude,longitude
@@ -101,7 +91,7 @@ DARKSKY_API_KEY - xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 ex.
 wethr -dt -da
-EOF
+"
 }
 
 data=""
