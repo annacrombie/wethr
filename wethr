@@ -1,5 +1,6 @@
 #!/bin/sh
 
+version="0.3.0"
 
 default_params="units=si&lang=en&extend=hourly&exclude=currently,daily,alerts,flags"
 params=${WETHR_PARAMS:-"$default_params"}
@@ -77,10 +78,16 @@ EOF
 }
 
 print_usage() {
-  printf "
-usage: wethr [-h|[-r][-d <data> [-d <data>[...]]][-p <plot args>]]
+  printf "wethr $version
+USAGE:
+  wethr [options]
 
-data:
+OPTIONS
+  -d <DATA> - add data to the output
+  -f - force redownloading of cached data
+  -p <OPTS> - pass along OPTS to plot
+
+DATA:
 \e[1;4;36ma\e[0mpparentTemperature
 wind\e[1;4;36mB\e[0mearing
 \e[1;4;36mc\e[0mloudCover*100
@@ -96,14 +103,11 @@ p\e[1;4;36mr\e[0messure
 \e[1;4;36mv\e[0misibility
 \e[1;4;36mw\e[0mindSpeed
 
-environment
-COORDS - lattitude,longitude
-  coordinates to fetch the weather for
-DARKSKY_API_KEY - xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-  your api key
-
-ex.
-wethr -dt -da
+ENVIRONMENT
+  COORDS - lattitude,longitude
+    coordinates to fetch the weather for
+  DARKSKY_API_KEY - xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    your api key
 "
 }
 
