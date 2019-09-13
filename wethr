@@ -16,8 +16,8 @@ next_color() {
     0) color="34 l";;
     1) color="35 m";;
     2) color="36 c";;
-    3) color="37 g";;
-    4) color="38 w";;
+    3) color="37 w";;
+    4) color="33 y";;
   esac
 }
 
