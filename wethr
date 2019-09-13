@@ -78,10 +78,20 @@ print_usage() {
 usage: wethr [-h|[-r][-d <data> [-d <data>[...]]][-p <plot args>]]
 
 data:
-\e[1;4;36ma\e[0mpparentTemperature, wind\e[1;4;36mB\e[0mearing, \e[1;4;36mc\e[0mloudCover*100, \e[1;4;36md\e[0mewPoint,
-wind\e[1;4;36mG\e[0must, \e[1;4;36mh\e[0mumidity*100, precip\e[1;4;36mI\e[0mntensity, \e[1;4;36mo\e[0mzone,
-\e[1;4;36mp\e[0mrecipProbability*100, p\e[1;4;36mr\e[0messure, \e[1;4;36mt\e[0memperature, \e[1;4;36mu\e[0mvIndex,
-\e[1;4;36mv\e[0misibility, \e[1;4;36mw\e[0mindSpeed
+\e[1;4;36ma\e[0mpparentTemperature
+wind\e[1;4;36mB\e[0mearing
+\e[1;4;36mc\e[0mloudCover*100
+\e[1;4;36md\e[0mewPoint
+wind\e[1;4;36mG\e[0must
+\e[1;4;36mh\e[0mumidity*100
+precip\e[1;4;36mI\e[0mntensity
+\e[1;4;36mo\e[0mzone
+\e[1;4;36mp\e[0mrecipProbability*100
+p\e[1;4;36mr\e[0messure
+\e[1;4;36mt\e[0memperature
+\e[1;4;36mu\e[0mvIndex
+\e[1;4;36mv\e[0misibility
+\e[1;4;36mw\e[0mindSpeed
 
 environment
 COORDS - lattitude,longitude
