@@ -126,7 +126,7 @@ done
 
 fetch_weather
 
-data=${data:-t}
+data=${data:-temperature}
 
 echo "last fetched: $human_date"
 plot_data=""
