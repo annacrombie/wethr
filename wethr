@@ -1,476 +1,151 @@
-#!/bin/zsh
+#!/bin/sh
 
-zmodload zsh/stat
-zmodload zsh/datetime
-
-log_() {
-  if [[ $w_color_output == true ]]; then
-    echo -e "[\e[35m$w_name\e[0m] $@"
-  else
-    echo -e "[$w_name] $@"
-  fi
-}
-
-profile_() {
-  [[ $w_prof != true ]] && return
-
-  for secs nsecs in $epochtime; do
-    print -v ns -f "%11d" $(((secs-lpf[1])*1000000000+(nsecs-lpf[2])))
-    log_ "[\e[32mprof\e[0m] [${ns}ns] $@"
-    lpf=($secs $nsecs)
-  done
-}
-
-log_debug_() {
-  [[ $w_verbose != true ]] && return
-
-  if [[ $w_color_output == true ]]; then
-    log_ "[\e[32mdebug\e[0m] $@"
-  else
-    log_ "[debug] $@"
-  fi
-}
-
-die_() {
-  if [[ $w_color_output == true ]]; then
-    log_ "[\e[31;1mfatal\e[0m] $@"
-  else
-    log_ "[fatal] $@"
-  fi
-
-  log_debug_ "exiting"
-  [[ $w_prof == true ]] && zprof
+die() {
+  echo "$@" >&2
   exit 1
 }
 
-get_latlon_() {
-  [[ (-z $LATLON && -n $w_loc_helper) ]] && \
-    typeset -g LATLON=$(eval "$w_loc_helper")
-  [[ -z $LATLON ]] && \
-    die_ "Please set your location in \$LATLON"
+next_color() {
+  case $(($1%5)) in
+    0) color="34 l";;
+    1) color="35 m";;
+    2) color="36 c";;
+    3) color="37 g";;
+    4) color="38 w";;
+  esac
 }
 
-get_new_weather_() {
-  local tmp
-  local tmpfile=$(mktemp)
-  local w_api
+data_source() {
+  case $1 in
+    a) ds="apparentTemperature";;
+    b) ds="windBearing";;
+    c) ds="cloudCover*100";;
+    d) ds="dewPoint";;
+    g) ds="windGust";;
+    h) ds="humidity*100";;
+    i) ds="precipIntensity";;
+    o) ds="ozone";;
+    p) ds="precipProbability*100";;
+    P) ds="pressure";;
+    t) ds="temperature";;
+    u) ds="uvIndex";;
+    v) ds="visibility";;
+    w) ds="windSpeed";;
+    *) ds="";;
+  esac
+}
 
-  [[ (-z $DARKSKY_API_KEY && -n $w_api_helper) ]] && \
-    DARKSKY_API_KEY=$(eval "$w_api_helper")
-  [[ -z $DARKSKY_API_KEY ]] && \
-    die_ "Please set \$DARKSKY_API_KEY"
+fetch_weather() {
+  [[ ! -n $COORDS ]] && die "please set COORDS"
+  [[ ! -n $DARKSKY_API_KEY ]] && die "please set DARKSKY_API_KEY"
 
-  w_api="${w_api_base}/forecast/${DARKSKY_API_KEY}/${LATLON}?$w_params"
+  data_dir="$data_dir/$COORDS"
+  mkdir -p "$data_dir"
 
-  log_debug_ "fetching new weather data to $w_data_file"
-  [[ $w_verbose == false ]] && tmp="-q"
+  last_fetch=0
+  [[ -f "$data_dir/metadata" ]] && source "$data_dir/metadata"
 
-  wget $tmp -O "$tmpfile" --compression=auto "$w_api"
-  tmp=$?
+  ctime="$(date +%s)"
 
-  if [[ $tmp -eq 0 ]]; then
-    mv "$tmpfile" "$w_data_file"
-  else
-    log_ "failed to retreive data"
-    rm "$tmpfile"
+  if [[ ! -f "$data_dir/src" ]] || [[ $((ctime - last_fetch)) -gt 3600 ]]; then
+    [[ -f "$data_dir/src" ]] && rm "$data_dir/*"
+
+    params=${WETHR_PARAMS:-units=si&lang=en&extend=hourly&exclude=currently,daily,alerts,flags}
+
+    curl "https://api.darksky.net/forecast/${DARKSKY_API_KEY}/${COORDS}?$params" > "$data_dir/src" \
+      || die "couldn't download data"
+
+    initial_date=$(jq '.hourly.data[0].time' "$data_dir/src")
+    hour_offset=$(((($initial_date/3600)+9)%24))
+
+    cat > "$data_dir/metadata" <<EOF
+last_fetch=$ctime
+human_date='$(date)'
+hour_offset=$hour_offset
+EOF
   fi
 
-  return $tmp
+  source "$data_dir/metadata"
 }
 
-check_update_() {
-  local file_stats
-  local data_age
-
-  if [[ -f $w_data_file ]]; then
-    zstat -H file_stats $w_data_file
-    data_age=$((EPOCHSECONDS-file_stats[mtime]))
-    log_debug_ "$w_data_file is ${data_age}s old"
-  else
-    log_debug_ "$w_data_file does not exist"
-  fi
-
-  if  [[ (-z $data_age || $data_age -gt $w_refresh) ]]; then
-    log_debug_ "attempting to refresh weather data"
-    get_new_weather_
-    if [[ ($? -ne 0 && ! -f $w_data_file) ]]; then
-      die_ "no data"
-    fi
-  fi
-}
-
-_graph_() {
-  profile_ "started _graph_"
-  local dates=($(jq -Mr ".$1.data[] | .time" $w_data_file))
-  profile_ "grabbed dates"
-  local labels
-  local start=12
-  local width=$((w_output_width-(start+3)))
-  [[ $width -ge $#dates ]] && width=$#dates
-  print -v labels -f "%-$((start+1))s" ""
-  local units_on_side
-  local date
-  local i=0
-  local now=$EPOCHSECONDS
-  local off=0
-  local tmp=0
-  local val
-  local clr
-  local pad
-
-  [[ $w_fast_forward == true ]] && log_debug_ "fast forwarding data"
-
-  profile_ "initialized _graph_"
-  for date in $dates; do
-    if [[ (($w_fast_forward == true && $date -lt $now)) ]]; then
-      off=$((off+1))
-      continue
-    fi
-
-    if [[ $((i%$4)) -eq 0 ]]; then
-      strftime -s val "$2" $date
-
-      if [[ $((val%$4)) -ne 0 ]]; then
-        labels+=" "
-        continue
-      fi
-
-      if [[ $val -eq 0 ]]; then
-        strftime -s val "$3" $date
-        clr=35
-      else
-        clr=0
-      fi
-
-      [[ ($w_color_output == true && $clr -ne $tmp) ]] && labels+="\e[${clr}m"
-      pad=$4
-      [[ $((i+$4)) -gt $width ]] && pad=$((width-(i+$4)))
-      print -v val -f "%-${pad}s" $val
-      labels+=$val
-      tmp=$clr
-    fi
-
-    i=$((i+1))
-    [[ $i -ge $width ]] && break
-  done
-
-  [[ $off -ge $#dates ]] && die_ "no data"
-  [[ ($w_color_output == true && $clr -ne 0) ]] && labels+="\e[0m"
-  profile_ "generated y-axis labels"
-
-  clr=0
-  for data in $w_data_to_print; do
-    if [[ ($w_draw_x_axis != true || $#w_unit_long[$data] -ge $w_plot_height) ]]; then
-      units_on_side=false
-    else
-      units_on_side=true
-    fi
-
-    now=$w_title[$data]
-    log_debug_ "printing data: $data ($now)"
-
-    if [[ ($units_on_side == false && $#w_unit[$data] -ge 1) ]]; then
-      now+=" ($w_unit[$data])"
-    fi
-
-    # Display centered title
-    tmp=$(($#dates-off))
-    [[ $tmp -gt $width ]] && tmp=$width
-    tmp=$((start+((width)-$#now)/2))
-    print -f "%${tmp}s%s\n" "" $now
-    profile_ "drew title"
-
-    [[ $w_verbose == true ]] && \
-      print -f "^%$((start-1))s|%${width}s$\n" "start" "width"
-
-    # Display plot
-    jq -Mr ".$1.data[$off:$((off+width))][] | .$w_data[$data]" $w_data_file | \
-      plot -c $w_plot_color -H $w_plot_height -
-
-    profile_ "drew plot"
-
-    if [[ $units_on_side == true ]]; then
-      # Display x-axis labels
-      tmp=$((w_plot_height-((w_plot_height-$#w_unit_long[$data])/2)))
-      echo -n "\e[${tmp}A\e[3C"
-      i=0
-      for c in ${(s::)w_unit_long[$data]}; do
-        echo -n "${c}\e[1B\e[1D"
-        i=$((i+1))
-      done
-
-      echo -n "\e[$((tmp-i))B\e[3D"
-
-      profile_ "drew x-axis"
-    fi
-
-    # Display y-axis labels
-    log_debug_ "printing labels, width: $width $#labels"
-    print $labels
-    profile_ "drew y-axis"
-
-
-    clr=$((clr+1))
-    [[ $clr -lt $#w_data_to_print ]] && echo
-  done
-}
-
-help_() {
-  local key
-  local options=""
-  local data=""
-  local mode=""
-  local tmp
-
-  for key in ${(ki)w_shortopts}; do
-    print -v tmp -f "  -%s, --%s\n" $key "$w_shortopts[$key]"
-    options+="$tmp"
-  done
-  for key in ${(ki)w_data}; do
-    print -v tmp -f "  %s - %s (%s)\n" $key "$w_title[$key]" "$w_unit_long[$key]"
-    data+="$tmp"
-  done
-  for key in ${(ki)w_modes}; do
-    print -v tmp -f "  %s, %s\n" $key "$w_modes[$key]"
-    mode+="$tmp"
-  done
-
+print_usage() {
   cat <<EOF
-$w_name $w_version
-Simple command line weather
-Powered by Dark Sky <https://darksky.net/poweredby/>
+usage: wethr [-h|[-d <data> [-d <data>[...]]] [-p <plot args>]
 
-Usage: $w_name [MODE] [OPTS]
-OPTS:
-$options
-DATA:
-$data
-MODE:
-$mode
-Try:
-$ wethr hourly -d tpic
+data:
+a - apparentTemperature
+b - windBearing
+c - cloudCover*100
+d - dewPoint
+g - windGust
+h - humidity*100
+i - precipIntensity
+o - ozone
+p - precipProbability*100
+P - pressure
+t - temperature
+u - uvIndex
+v - visibility
+w - windSpeed
+
+environment
+COORDS - lattitude,longitude
+  coordinates to fetch the weather for
+DARKSKY_API_KEY - xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  your api key
+
+ex.
+wethr -dt -da
 EOF
 }
 
-typeset -A w_data
-w_data[a]="apparentTemperature"
-w_data[b]="windBearing"
-w_data[c]="cloudCover*100"
-w_data[d]="dewPoint"
-w_data[g]="windGust"
-w_data[h]="humidity*100"
-w_data[i]="precipIntensity"
-w_data[o]="ozone"
-w_data[p]="precipProbability*100"
-w_data[P]="pressure"
-w_data[t]="temperature"
-w_data[u]="uvIndex"
-w_data[v]="visibility"
-w_data[w]="windSpeed"
-typeset -A w_title
-w_title[a]="Feels Like"
-w_title[b]="Wind Bearing"
-w_title[c]="Cloud Cover"
-w_title[d]="Dew Point"
-w_title[g]="Wind Gust"
-w_title[h]="Humidity"
-w_title[i]="Precip. Intensity"
-w_title[o]="Ozone"
-w_title[P]="Atmospheric Pressure"
-w_title[p]="Precip. Probability"
-w_title[t]="Temperature"
-w_title[u]="UV Index"
-w_title[v]="Visibility"
-w_title[w]="Wind Speed"
-typeset -A w_unit
-w_unit[a]="°C"
-w_unit[b]="°"
-w_unit[c]="%"
-w_unit[d]="°C"
-w_unit[g]="m/s"
-w_unit[h]="%"
-w_unit[i]="mm/h"
-w_unit[o]="DU"
-w_unit[p]="%"
-w_unit[P]="hPa"
-w_unit[t]="°C"
-w_unit[u]=""
-w_unit[v]="km"
-w_unit[w]="m/s"
-typeset -A w_unit_long
-w_unit_long[a]="Degrees C"
-w_unit_long[b]="Degrees"
-w_unit_long[c]="Percent"
-w_unit_long[d]="Degrees C"
-w_unit_long[g]=$w_unit[g]
-w_unit_long[h]="Percent"
-w_unit_long[i]=$w_unit[i]
-w_unit_long[o]="Dobson Units"
-w_unit_long[P]="hPa"
-w_unit_long[p]="Percent"
-w_unit_long[t]="Degrees C"
-w_unit_long[u]="Index"
-w_unit_long[v]=$w_unit[v]
-w_unit_long[w]=$w_unit[w]
-typeset -A w_shortopts
-w_shortopts[c]=color
-w_shortopts[C]=no-color
-w_shortopts[d]=data
-w_shortopts[f]=fast-forward
-w_shortopts[F]=no-fast-forward
-w_shortopts[g]=plot-height
-w_shortopts[h]=help
-w_shortopts[K]=api-helper
-w_shortopts[k]=api-key
-w_shortopts[l]=loc
-w_shortopts[L]=loc-helper
-w_shortopts[p]=profile
-w_shortopts[R]=no-refresh
-w_shortopts[r]=refresh
-w_shortopts[v]=verbose
-w_shortopts[V]=version
-w_shortopts[w]=width
-w_shortopts[X]=no-x-axis
-w_shortopts[x]=x-axis
-typeset -A w_modes
-w_modes[h]=hourly
-w_modes[m]=minutely
+data=""
+plot_args=""
+data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/wethr2"
+mkdir -p "$data_dir" || die "failed to create data directory"
 
-# name
-w_name="wethr"
-w_version="0.1.0"
-
-# api settings
-w_api_base="https://api.darksky.net"
-w_params="units=si&lang=en&extend=hourly&exclude=currently,daily,alerts,flags"
-
-# cache settings
-if [[ -n "$XDG_DATA_HOME" ]]; then
-  w_data_dir="$XDG_DATA_HOME/$w_name"
-else
-  w_data_dir="$HOME/.local/share/$w_name"
-fi
-
-w_refresh=3600
-
-# output settings
-w_draw_x_axis=false
-[[ -t 1 ]] && w_draw_x_axis=true
-w_color_output=true
-w_output_width=$COLUMNS
-
-# behavior
-w_mode=hourly
-w_force_refresh=false
-w_force_skip_check=false
-w_data_to_print=()
-w_fast_forward=true
-w_api_helper=''
-w_verbose=false
-w_prof=false
-w_plot_color=35
-w_plot_height=0
-
-process_longopt_() {
-  local tmp
-  case $1 in
-    ("help") help_;exit ;;
-    ("version") print "$w_name $w_version";exit ;;
-    ("refresh") w_force_refresh=true;;
-    ("no-refresh") w_force_skip_check=true;;
-    ("x-axis") w_draw_x_axis=true;;
-    ("no-x-axis") w_draw_x_axis=false;;
-    ("color") w_color_output=true;;
-    ("no-color") w_plot_color=0; w_color_output=false;;
-    ("width") w_output_width=$2;w_shift_amnt=1;;
-    ("verbose") w_verbose=true;;
-    ("plot-height")
-      tmp=$(($2+0))
-      [[ $tmp -ge 1 ]] && w_plot_height=$tmp
-      w_shift_amnt=1;;
-    ("profile")
-      zmodload zsh/zprof
-      lpf=("${epochtime[@]}")
-      w_prof=true;;
-    ("fast-forward") w_fast_forward=true;;
-    ("no-fast-forward") w_fast_forward=false;;
-    ("api-key") DARKSKY_API_KEY=$2;w_shift_amnt=1;;
-    ("api-helper") w_api_helper=$2;w_shift_amnt=1;;
-    ("loc") LATLON=$2;w_shift_amnt=1;;
-    ("loc-helper") w_loc_helper=$2;w_shift_amnt=1;;
-    ("data")
-      for c in ${(s::)2}; do
-        case $c in
-          ('.')
-            for key _ in ${(kv)w_data}; do
-              w_data_to_print+=$key
-            done;;
-          *) w_data_to_print+=$c;;
-        esac
-      done;
-      w_shift_amnt=1;;
-    *) die_ "unknown long option --$1"
+while getopts "hp:d:" opt; do
+  case $opt in
+    p)
+      plot_args="$OPTARG"
+      ;;
+    d)
+      data_source "$OPTARG"
+      data="$ds $data"
+      ;;
+    h)
+      print_usage
+      exit
+      ;;
+    ?)
+      print_usage
+      exit 1
+      ;;
   esac
-}
-
-while [[ -n "$@" ]]; do
-  case $1 in
-    --*)
-      w_shift_amnt=0
-      process_longopt_ ${1##--} $2
-      shift $w_shift_amnt;;
-    -*)
-      for c in ${(s::)1##-}; do
-        w_shift_amnt=0
-
-        [[ -z $w_shortopts[$c] ]] && die_ "unknown option -$c"
-
-        process_longopt_ $w_shortopts[$c] $2
-        shift $w_shift_amnt
-      done;;
-    *)
-      if [[ -n $w_modes[$1] ]]; then
-        w_mode=$w_modes[$1]
-      else
-        w_mode=$1
-      fi;;
-  esac
-  shift
 done
 
-get_latlon_
-log_debug_ "latlon: $LATLON"
+fetch_weather
 
-mkdir -p "$w_data_dir"
-w_data_file="$w_data_dir/$LATLON"
-log_debug_ "w_data_file: ${w_data_file}"
+data=${data:-t}
 
-profile_ "parsed options"
+echo "last fetched: $human_date"
+plot_data=""
+i=0
+for d in $data; do
+  next_color $i
 
-[[ $w_force_refresh == true ]] && get_new_weather_
-[[ $w_force_skip_check == false ]] && check_update_
+  printf "\e[%sm$d\e[0m " ${color% *}
 
-[[ $#w_data_to_print -eq 0 ]] && w_data_to_print+=p
+  f="$data_dir/$d"
 
-if [[ $w_plot_height -eq 0 ]]; then
-  w_plot_height=$(((LINES-2-2*$#w_data_to_print)/$#w_data_to_print))
-
-  if [[ $w_plot_height -gt 20 ]]; then
-    w_plot_height=20
-  elif [[ $w_plot_height -lt 5 ]]; then
-    w_plot_height=5
+  if [[ ! -f "$data_dir/$d" ]]; then
+    jq -Mr ".hourly.data[] | .$d" "$data_dir/src" > "$data_dir/$d"
   fi
-fi
 
-log_debug_ "w_plot_height: ${w_plot_height}"
-log_debug_ "w_data_to_print: ${w_data_to_print}"
-log_debug_ "w_mode: ${w_mode}"
+  plot_data="-c ${color#* } -i $f $plot_data"
+  i=$((i+1))
+done
 
-case $w_mode in
-  ('minutely') _graph_ "minutely" "%-M" "%-H" 5;;
-  ('hourly') _graph_ "hourly" "%-H" "%-a" 4;;
-  *) die_ "unknown mode '$w_mode'";;
-esac
+echo
 
-[[ $w_prof == true ]] && zprof
-exit 0
+plot -x 4:$hour_offset:24:r $plot_args $plot_data
