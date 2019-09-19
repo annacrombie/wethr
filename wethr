@@ -57,9 +57,12 @@ fetch_weather() {
     [[ ! -n $COORDS ]] && die "please set COORDS"
     [[ ! -n $DARKSKY_API_KEY ]] && die "please set DARKSKY_API_KEY"
 
-    curl --compressed -sS "$endpoint" > "$data_dir/src" \
-      || [[ -f "$data_dir/src" ]] \
-      || die "couldn't download data"
+    curl --compressed -sS "$endpoint" > "$data_dir/src" || \
+      if [[ -f "$data_dir/src" ]]; then
+        return;
+      else
+        die "couldn't download data"
+      fi
 
     [[ -d "$data_dir/derived" ]] && rm -r "$data_dir/derived"
     mkdir -p "$data_dir/derived"
@@ -120,7 +123,7 @@ mkdir -p "$data_dir" || die "failed to create data directory"
 while getopts "hp:d:f" opt; do
   case $opt in
     p)
-      plot_args="$OPTARG"
+      plot_args="$plot_args -${OPTARG##-}"
       ;;
     d)
       data_source "$OPTARG"
@@ -156,10 +159,10 @@ for d in $data; do
 
   [[ -f "$f" ]] || jq -Mr ".hourly.data[] | .$d" "$data_dir/src" > "$f"
 
-  plot_data="-c ${color#* } -i $f $plot_data"
+  plot_data="-c${color#* } -i $f $plot_data"
   i=$((i+1))
 done
 
 echo
 
-plot -x 4:$hour_offset:24:l $plot_args $plot_data
+plot -x 4:$hour_offset:24::l $plot_args $plot_data
