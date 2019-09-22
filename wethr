@@ -68,6 +68,9 @@ fetch_weather() {
     mkdir -p "$data_dir/derived"
 
     initial_date=$(jq '.hourly.data[0].time' "$data_dir/src")
+
+    [ -z $initial_date ] && die "failed to extract data"
+
     hour_offset=$(((($initial_date/3600)+9)%24))
 
     cat > "$data_dir/metadata" <<EOF
