@@ -47,24 +47,24 @@ fetch_weather() {
   mkdir -p "$data_dir"
 
   last_fetch=0
-  [[ -f "$data_dir/metadata" ]] && source "$data_dir/metadata"
+  [ -f "$data_dir/metadata" ] && source "$data_dir/metadata"
 
   ctime="$(date +%s)"
 
-  if [[ $force_fetch ]] || [[ ! -f "$data_dir/src" ]] \
-    || [[ $((ctime - last_fetch)) -gt 3600 ]]
+  if [ $force_fetch ] || [ ! -f "$data_dir/src" ] \
+    || [ $((ctime - last_fetch)) -gt 3600 ]
   then
-    [[ ! -n $COORDS ]] && die "please set COORDS"
-    [[ ! -n $DARKSKY_API_KEY ]] && die "please set DARKSKY_API_KEY"
+    [ ! -n $COORDS ] && die "please set COORDS"
+    [ ! -n $DARKSKY_API_KEY ] && die "please set DARKSKY_API_KEY"
 
     curl --compressed -sS "$endpoint" > "$data_dir/src" || \
-      if [[ -f "$data_dir/src" ]]; then
+      if [ -f "$data_dir/src" ]; then
         return;
       else
         die "couldn't download data"
       fi
 
-    [[ -d "$data_dir/derived" ]] && rm -r "$data_dir/derived"
+    [ -d "$data_dir/derived" ] && rm -r "$data_dir/derived"
     mkdir -p "$data_dir/derived"
 
     initial_date=$(jq '.hourly.data[0].time' "$data_dir/src")
@@ -157,7 +157,7 @@ for d in $data; do
 
   f="$data_dir/derived/$d"
 
-  [[ -f "$f" ]] || jq -Mr ".hourly.data[] | .$d" "$data_dir/src" > "$f"
+  [ -f "$f" ] || jq -Mr ".hourly.data[] | .$d" "$data_dir/src" > "$f"
 
   plot_data="-c${color#* } -i $f $plot_data"
   i=$((i+1))
