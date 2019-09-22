@@ -1,6 +1,7 @@
 #!/bin/sh
 
 version="0.3.0"
+weather_expiration_secs=3600
 
 default_params="units=si&lang=en&extend=hourly&exclude=currently,daily,alerts,flags"
 params=${WETHR_PARAMS:-"$default_params"}
@@ -43,6 +44,7 @@ data_source() {
 }
 
 fetch_weather() {
+  [ -z $COORDS ] && die "please set COORDS"
   data_dir="$data_dir/$COORDS"
   mkdir -p "$data_dir"
 
@@ -52,10 +54,9 @@ fetch_weather() {
   ctime="$(date +%s)"
 
   if [ $force_fetch ] || [ ! -f "$data_dir/src" ] \
-    || [ $((ctime - last_fetch)) -gt 3600 ]
+    || [ $((ctime - last_fetch)) -gt $weather_expiration_secs ]
   then
-    [ ! -n $COORDS ] && die "please set COORDS"
-    [ ! -n $DARKSKY_API_KEY ] && die "please set DARKSKY_API_KEY"
+    [ -z $DARKSKY_API_KEY ] && die "please set DARKSKY_API_KEY"
 
     curl --compressed -sS "$endpoint" > "$data_dir/src" || \
       if [ -f "$data_dir/src" ]; then
@@ -121,6 +122,7 @@ force_fetch=""
 data=""
 plot_args=""
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/wethr2"
+echo $data_dir
 mkdir -p "$data_dir" || die "failed to create data directory"
 
 while getopts "hp:d:f" opt; do
