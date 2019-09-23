@@ -93,7 +93,15 @@ set_backend_() {
 }
 
 download_() {
-  curl --compressed -sS "$@"
+  if command -v curl >/dev/null
+  then
+    curl --compressed -sS "$@"
+  elif command -v wget >/dev/null
+  then
+    wget --compression=auto -qO - "$@"
+  else
+    die "failed to fetch files: no supported downloader installed"
+  fi
 }
 
 fetch_weather() {
