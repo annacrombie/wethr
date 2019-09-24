@@ -86,6 +86,29 @@ set_backend_() {
         "wind_speed": .wind.speed
       } | [., ., .]] | flatten'
       ;;
+    weatherbit)
+      [ -z $WEATHERBIT_API_KEY ] && die "please set WEATHERBIT_API_KEY"
+      local params="lat=${COORDS%%,*}&lon=${COORDS##*,}&key=${WEATHERBIT_API_KEY}"
+      local api_base="https://api.weatherbit.io/v2.0/forecast/hourly"
+      endpoint="$api_base?$params"
+      jq_extract_date=".data[0].ts"
+      jq_normalize='[.data[] | {
+        "feels_like": .app_temp,
+        "clouds": .clouds,
+        "dew_point": .dewpt,
+        "humidity": .rh,
+        "ozone": .ozone,
+        "precip_prob": .pop,
+        "precip_amnt": .precip,
+        "pressure": .pres,
+        "temp": .temp,
+        "uv": .uv,
+        "visibility": .vis,
+        "wind_dir": .wind_dir,
+        "wind_gust": .wind_gust_spd,
+        "wind_speed": .wind_spd,
+      }]'
+      ;;
     *)
       die "invalid backend '$1'"
       ;;
@@ -154,7 +177,7 @@ USAGE:
   wethr [options]
 
 OPTIONS
-  -b darksky|openweathermap - select backend to use
+  -b darksky|openweathermap|weatherbit - select backend to use
   -d <DATA> - add data to the output
   -f - force redownloading of cached data
   -p <OPTS> - pass along OPTS to plot(1)
