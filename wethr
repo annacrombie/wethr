@@ -4,7 +4,7 @@ version="0.4.0"
 weather_expiration_secs=3600
 
 die() {
-  echo "$@" >&2
+  printf "$@\n" >&2
   exit 1
 }
 
@@ -119,7 +119,7 @@ fetch_weather() {
   then
     download_ "$endpoint" > "$data_dir/src" || \
       if [ -f "$data_dir/src" ]; then
-        echo "failed to fetch new data"
+        printf "failed to fetch new data\n"
         return;
       else
         die "couldn't download data"
@@ -148,7 +148,8 @@ EOF
 }
 
 print_usage() {
-  printf "wethr $version
+  cat <<EOF
+wethr $version
 USAGE:
   wethr [options]
 
@@ -177,7 +178,7 @@ wind_speed, ws
 ENVIRONMENT
   COORDS - lattitude,longitude
     coordinates to fetch the weather for
-"
+EOF
 }
 
 backend=darksky
@@ -216,22 +217,21 @@ fetch_weather
 
 data=${data:-temp}
 
-echo "last fetched: $human_date"
-plot_data=""
+plot_header=""
 i=0
 for d in $data; do
-  next_color $i
-
-  printf "\e[%sm$d\e[0m " ${color% *}
 
   f="$data_dir/derived/${backend}_$d"
 
   [ -f "$f" ] || jq -Mr "map(.$d)" "$data_dir/norm" > "$f"
 
-  plot_data="-c${color#* } -i $f $plot_data"
-  i=$((i+1))
+  next_color $i
+  plot_args="$plot_args -c${color#* } -i$f"
+  plot_header="\033[${color% *}m$d\033[0m $plot_header"
+
+  ((i++))
 done
 
-echo
+printf "last fetched: $human_date\n${plot_header% }\n"
 
-plot -x 4:$hour_offset:24::l $plot_args $plot_data
+plot -x 4:$hour_offset:24::l $plot_args
