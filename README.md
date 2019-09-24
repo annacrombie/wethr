@@ -1,54 +1,68 @@
 # wethr
 
-![wethr](screenshot.png)
+Simple command line weather.
 
-Simple command line weather, built with performance and simplicity in mind.
-Powered by [Darksky](https://darksky.net/dev), `wethr` will only re-download
-weather after its old data has "expired" (1 hour by default).  It supports the
-`hourly` forecasts.
+##  Features
+
+- caches weather data (for 1 hour by default).
+  + you could even check the weather conditions off-line after caching them
+    once, albeit with accuracy degradation
+- caches the results of jq execution
+- most of the display logic is handled by [plot](https://github.com/annacrombie/plot)
+- POSIX (probably, need to do more testing)
 
 # Installation
 
 ### Requirements
 
-- [jq](https://github.com/stedolan/jq)
 - [plot](https://github.com/annacrombie/plot)
-- [curl](https://curl.haxx.se/)
+- [jq](https://github.com/stedolan/jq)
+- `curl` or `wget`
 
 ### Environment
 
-You must also obtain a Darksky api key [here](https://darksky.net/dev/register).
-In addition, you need to know your current location in coordinates,
-[latlon](https://github.com/annacrombie/latlon) might be something you are
-interested in.  Or just use a map.
+You must also obtain an api key for the backend you want to use
+
+- [darksky](https://darksky.net/dev/register)
+- [openweathermap](https://home.openweathermap.org/users/sign_up)
+
+DarkSky has more detailed data available for the free tier.
+
+In addition, you need to know your current location in coordinates.
+
+- look it up
+- a small cli [latlon](https://github.com/annacrombie/latlon)
 
 # Usage
 
 ```
-usage: wethr [-h|[-d <data> [-d <data>[...]]] [-p <plot args>]
+wethr 0.4.0
+USAGE:
+  wethr [options]
 
-data:
-a - apparentTemperature
-b - windBearing
-c - cloudCover*100
-d - dewPoint
-g - windGust
-h - humidity*100
-i - precipIntensity
-o - ozone
-p - precipProbability*100
-P - pressure
-t - temperature
-u - uvIndex
-v - visibility
-w - windSpeed
+OPTIONS
+  -b darksky|openweathermap - select backend to use
+  -d <DATA> - add data to the output
+  -f - force redownloading of cached data
+  -p <OPTS> - pass along OPTS to plot(1)
 
-environment
-COORDS - lattitude,longitude
-  coordinates to fetch the weather for
-DARKSKY_API_KEY - xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-  your api key
+DATA:
+clouds, c
+dew_point, dp
+feels_like, f
+humidity, h
+ozone, o
+precip_amnt, pa
+precip_prob, pp
+pressure, pr
+temp, t
+uv, u
+visibility, v
+wind_dir, wd
+wind_gust, wg
+wind_speed, ws
 
-ex.
-wethr -dt -da
+ENVIRONMENT
+  COORDS - lattitude,longitude
+    coordinates to fetch the weather for
 ```
