@@ -10,14 +10,16 @@ Simple command line weather.
 - caches the results of jq execution
 - most of the display logic is handled by [plot](https://github.com/annacrombie/plot)
 - POSIX (probably, need to do more testing)
+- supports multiple weather backends
+  + display average data accross all backends
 
-# Installation
+## Installation
 
 ### Requirements
 
 - [plot](https://github.com/annacrombie/plot)
 - [jq](https://github.com/stedolan/jq)
-- `curl` or `wget`
+- `curl` (or `wget`)
 
 ### Environment
 
@@ -25,6 +27,7 @@ You must also obtain an api key for the backend you want to use
 
 - [darksky](https://darksky.net/dev/register)
 - [openweathermap](https://home.openweathermap.org/users/sign_up)
+- [weatherbit](https://www.weatherbit.io/account/create)
 
 DarkSky has more detailed data available for the free tier.
 
@@ -33,15 +36,17 @@ In addition, you need to know your current location in coordinates.
 - look it up
 - a small cli [latlon](https://github.com/annacrombie/latlon)
 
-# Usage
+## Usage
 
 ```
 wethr 0.4.0
 USAGE:
-  wethr [options]
+  wethr [-a|-b<backend>] [-f] [-d<data>[-d<data>[...]]]
 
 OPTIONS
-  -b darksky|openweathermap - select backend to use
+  -a - average all cached data
+  -c - cache only, don't display anything
+  -b darksky|openweathermap|weatherbit - select backend to use
   -d <DATA> - add data to the output
   -f - force redownloading of cached data
   -p <OPTS> - pass along OPTS to plot(1)
