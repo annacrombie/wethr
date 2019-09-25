@@ -128,10 +128,6 @@ download_() {
 }
 
 fetch_weather() {
-  [ -z $COORDS ] && die "please set COORDS"
-  data_dir="$data_dir/$COORDS"
-  mkdir -p "$data_dir"
-
   last_fetch=0
   [ -f "$data_dir/metadata" ] && source "$data_dir/metadata"
 
@@ -142,7 +138,7 @@ fetch_weather() {
   then
     download_ "$endpoint" > "$data_dir/src" || \
       if [ -f "$data_dir/src" ]; then
-        printf "failed to fetch new data\n"
+        printf "failed to fetch new data\n" >&2
         return;
       else
         die "couldn't download data"
@@ -170,13 +166,39 @@ EOF
   source "$data_dir/metadata"
 }
 
+average_() {
+  [ -f $data_dir/avg/norm ] && [ ! $force_fetch ] && return
+
+  cat "$data_dir"/*/norm | \
+    jq -Mr --slurp \ '
+    def am(a; b):
+      a as $a
+      | b
+      | with_entries(
+        . as $t
+        | { "key": .key, "value": (($a[$t.key] // 0) + $t.value) }) ;
+
+    . as $in
+    | [[range(map(length) | max)][]
+      | . as $i
+      | $in
+      | map(.[$i])
+      | map(select(. != null))
+      | length as $len
+      | reduce .[] as $i ({}; am(.; $i))
+      | with_entries(. as $t | { "key": $t.key, "value": ($t.value / $len) })]
+    ' > $data_dir/avg/norm
+}
+
 print_usage() {
   cat <<EOF
 wethr $version
 USAGE:
-  wethr [options]
+  wethr [-a|-b<backend>] [-f] [-d<data>[-d<data>[...]]]
 
 OPTIONS
+  -a - use mean of cached data
+  -c - cache only, don't display anything
   -b darksky|openweathermap|weatherbit - select backend to use
   -d <DATA> - add data to the output
   -f - force redownloading of cached data
@@ -206,27 +228,37 @@ EOF
 
 backend=darksky
 force_fetch=""
+cacheonly=""
+average=""
 data=""
 plot_args=""
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/wethr2"
 mkdir -p "$data_dir" || die "failed to create data directory"
 
-while getopts "hp:d:fb:" opt; do
+while getopts "ab:cd:fhp:" opt; do
   case $opt in
+    a)
+      average=1
+      ;;
     b)
       backend="$OPTARG"
       ;;
-    p)
-      plot_args="$plot_args -${OPTARG##-}"
+    c)
+      cacheonly=1
       ;;
     d)
       data_source "$OPTARG"
       data="$ds $data"
       ;;
-    f) force_fetch=1;;
+    f)
+      force_fetch=1
+      ;;
     h)
       print_usage
       exit
+      ;;
+    p)
+      plot_args="$plot_args -${OPTARG##-}"
       ;;
     ?)
       print_usage
@@ -235,8 +267,24 @@ while getopts "hp:d:fb:" opt; do
   esac
 done
 
-set_backend_ "$backend"
-fetch_weather
+[ -z $COORDS ] && die "please set COORDS"
+data_dir="$data_dir/$COORDS"
+
+if [ $average ]; then
+  mkdir -p "$data_dir/avg"
+  average_
+  data_dir="$data_dir/avg"
+  mkdir -p "$data_dir/derived"
+else
+  set_backend_ "$backend"
+  data_dir="$data_dir/$backend"
+  mkdir -p "$data_dir"
+  fetch_weather
+
+  printf "last fetched: $human_date\n"
+fi
+
+[ $cacheonly ] && exit
 
 data=${data:-temp}
 
@@ -244,7 +292,7 @@ plot_header=""
 i=0
 for d in $data; do
 
-  f="$data_dir/derived/${backend}_$d"
+  f="$data_dir/derived/$d"
 
   [ -f "$f" ] || jq -Mr "map(.$d)" "$data_dir/norm" > "$f"
 
@@ -255,6 +303,5 @@ for d in $data; do
   ((i++))
 done
 
-printf "last fetched: $human_date\n${plot_header% }\n"
-
+printf "${plot_header% }\n"
 plot -x 4:$hour_offset:24::l $plot_args
