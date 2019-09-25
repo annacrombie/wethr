@@ -197,7 +197,7 @@ USAGE:
   wethr [-a|-b<backend>] [-f] [-d<data>[-d<data>[...]]]
 
 OPTIONS
-  -a - use mean of cached data
+  -a - average all cached data
   -c - cache only, don't display anything
   -b darksky|openweathermap|weatherbit - select backend to use
   -d <DATA> - add data to the output
