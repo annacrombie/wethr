@@ -47,6 +47,7 @@ set_backend_() {
       endpoint="${api_base}/${DARKSKY_API_KEY}/${COORDS}?$params"
       jq_extract_date=".hourly.data[0].time"
       jq_normalize='[.hourly.data[] | {
+        "hour": (.time / 3600),
         "feels_like": .apparentTemperature,
         "clouds": (.cloudCover*100),
         "dew_point": .dewPoint,
@@ -70,6 +71,7 @@ set_backend_() {
       endpoint="$api_base?$params"
       jq_extract_date=".list[0].dt"
       jq_normalize='[.list[] | {
+        "hour": (.dt / 3600),
         "feels_like": .main.temp,
         "clouds": .clouds.all,
         "dew_point": 0,
@@ -84,7 +86,7 @@ set_backend_() {
         "wind_dir": .wind.deg,
         "wind_gust": 0,
         "wind_speed": .wind.speed
-      } | [., ., .]] | flatten'
+      } as $e | [range(3)] | map($e * { "hour": ($e.hour + .) })] | flatten'
       ;;
     weatherbit)
       [ -z $WEATHERBIT_API_KEY ] && die "please set WEATHERBIT_API_KEY"
@@ -93,6 +95,7 @@ set_backend_() {
       endpoint="$api_base?$params"
       jq_extract_date=".data[0].ts"
       jq_normalize='[.data[] | {
+        "hour": (.ts / 3600),
         "feels_like": .app_temp,
         "clouds": .clouds,
         "dew_point": .dewpt,
@@ -167,27 +170,34 @@ EOF
 }
 
 average_() {
-  [ -f $data_dir/avg/norm ] && [ ! $force_fetch ] && return
+  if [ $force_fetch ]; then
+    rm -r $data_dir/avg/*
+  fi
+
+  [ -f $data_dir/avg/norm ] && return
 
   cat "$data_dir"/*/norm | \
-    jq -Mr --slurp \ '
+    jq -Mr --slurp '
     def am(a; b):
       a as $a
-      | b
-      | with_entries(
-        . as $t
-        | { "key": .key, "value": (($a[$t.key] // 0) + $t.value) }) ;
+        | b | with_entries(. as $e | .value += ($a[$e.key] // 0));
 
-    . as $in
-    | [[range(map(length) | max)][]
-      | . as $i
-      | $in
-      | map(.[$i])
-      | map(select(. != null))
-      | length as $len
-      | reduce .[] as $i ({}; am(.; $i))
-      | with_entries(. as $t | { "key": $t.key, "value": ($t.value / $len) })]
-    ' > $data_dir/avg/norm
+    flatten
+      | group_by(.hour)
+      | map(
+        length as $l
+        | reduce .[] as $e ({}; am(.; $e))
+        | with_entries(.value /= $l)
+      )
+    ' > $data_dir/avg/norm || die "failed to average data"
+
+    hour=$(jq '.[0].hour' $data_dir/avg/norm)
+    hour_offset=$(((hours+9)%24))
+
+    cat > "$data_dir/avg/metadata" <<EOF
+human_date='$(date)'
+hour_offset=$hour_offset
+EOF
 }
 
 print_usage() {
@@ -274,14 +284,13 @@ if [ $average ]; then
   mkdir -p "$data_dir/avg"
   average_
   data_dir="$data_dir/avg"
+  source "$data_dir/metadata"
   mkdir -p "$data_dir/derived"
 else
   set_backend_ "$backend"
   data_dir="$data_dir/$backend"
   mkdir -p "$data_dir"
   fetch_weather
-
-  printf "last fetched: $human_date\n"
 fi
 
 [ $cacheonly ] && exit
@@ -303,5 +312,5 @@ for d in $data; do
   ((i++))
 done
 
-printf "${plot_header% }\n"
+printf "last fetched: $human_date\n${plot_header% }\n"
 plot -x 4:$hour_offset:24::l $plot_args
