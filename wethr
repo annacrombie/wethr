@@ -300,7 +300,6 @@ data=${data:-temp}
 plot_header=""
 i=0
 for d in $data; do
-
   f="$data_dir/derived/$d"
 
   [ -f "$f" ] || jq -Mr "map(.$d)" "$data_dir/norm" > "$f"
@@ -309,7 +308,7 @@ for d in $data; do
   plot_args="$plot_args -c${color#* } -i$f"
   plot_header="\033[${color% *}m$d\033[0m $plot_header"
 
-  ((i++))
+  i=$((i+1))
 done
 
 printf "last fetched: $human_date\n${plot_header% }\n"
