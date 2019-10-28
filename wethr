@@ -192,7 +192,7 @@ average_() {
     ' > $data_dir/avg/norm || die "failed to average data"
 
     hour=$(jq '.[0].hour' $data_dir/avg/norm)
-    hour_offset=$(((hours+9)%24))
+    hour_offset=$(((hour+9)%24))
 
     cat > "$data_dir/avg/metadata" <<EOF
 human_date='$(date)'
