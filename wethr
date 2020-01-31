@@ -277,6 +277,7 @@ while getopts "ab:cd:fhp:" opt; do
   esac
 done
 
+COORDS="${COORDS:-}"
 [ -z $COORDS ] && die "please set COORDS"
 data_dir="$data_dir/$COORDS"
 
