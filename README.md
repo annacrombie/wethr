@@ -27,6 +27,8 @@ You must also obtain an api key for the backend you want to use
 - [darksky](https://darksky.net/dev/register)
 - [openweathermap](https://home.openweathermap.org/users/sign_up)
 - [weatherbit](https://www.weatherbit.io/account/create)
+- [weather.gov](https://www.weather.gov/documentation/services-web-api) -- no
+  api key required
 
 In addition, you need to know your current location in coordinates.
 

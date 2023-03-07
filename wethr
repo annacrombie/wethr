@@ -43,6 +43,21 @@ data_source() {
 	esac
 }
 
+determine_endpoint_weather_gov() {
+	if [ -f "$data_dir/endpoint" ]; then
+		# shellcheck source=/dev/null
+		. "$data_dir/endpoint"
+		return
+	fi
+
+	uri="https://api.weather.gov/points/${COORDS}"
+	endpoint="$(download_ -L "$uri" | jq -Mr '.properties.forecastHourly')?units=si"
+
+	cat > "$data_dir/endpoint" <<EOF
+endpoint="$endpoint"
+EOF
+}
+
 set_backend_() {
 	case $1 in
 	darksky)
@@ -119,6 +134,42 @@ set_backend_() {
 			"wind_gust": .wind_gust_spd,
 			"wind_speed": .wind_spd,
 		}]'
+
+		;;
+	weather.gov)
+		determine_endpoint_func="determine_endpoint_weather_gov"
+		funcs='
+			def tz_offset:
+			  . | split("")[19:22]|join("")|tonumber * 3600
+			;
+
+			def to_unzoned_time:
+			  . | split("")[0:19]|join("") + "Z" | fromdate
+			;
+
+			def to_timestamp:
+			   (. | to_unzoned_time) - (. | tz_offset)
+			;
+		'
+		jq_extract_date="$funcs"'.properties.periods[0].startTime | to_timestamp'
+		jq_normalize="$funcs"'[.properties.periods[] | {
+			"hour": (.startTime | to_timestamp / 3600),
+			"feels_like": (.temperature),
+			"clouds": 0,
+			"dew_point": (.dewpoint.value),
+			"humidity": (.relativeHumidity.value),
+			"ozone": 0,
+			"precip_prob": (.probabilityOfPrecipitation.value),
+			"precip_amnt": 0,
+			"pressure": 0,
+			"temp": (.temperature),
+			"uv": 0,
+			"visibility": 0,
+			"wind_dir": 0,
+			"wind_gust": 0,
+			"wind_speed": 0
+		}]'
+
 		;;
 	*)
 		die "invalid backend '$1'"
@@ -127,13 +178,7 @@ set_backend_() {
 }
 
 download_() {
-	if command -v curl >/dev/null; then
-		curl --compressed -sS "$@"
-	elif command -v wget >/dev/null; then
-		wget --compression=auto -qO - "$@"
-	else
-		die "failed to fetch files: no supported downloader installed"
-	fi
+	curl --compressed -sS "$@"
 }
 
 calc_tz_offset() {
@@ -160,6 +205,11 @@ fetch_weather() {
 	if [ "$force_fetch" ] \
 		|| [ ! -f "$data_dir/src" ] \
 		|| [ $((ctime - last_fetch)) -gt $weather_expiration_secs ]; then
+
+		if [ -n "$determine_endpoint_func" ]; then
+			"$determine_endpoint_func"
+		fi
+
 		download_ "$endpoint" > "$data_dir/src" || \
 			if [ -f "$data_dir/src" ]; then
 				printf "failed to fetch new data\n" >&2
@@ -215,7 +265,9 @@ average_() {
 		' > "$data_dir/avg/norm" || die "failed to average data"
 
 		hour=$(jq '.[0].hour' "$data_dir/avg/norm")
-		hour_offset=$(((hour+9)%24))
+		calc_tz_offset
+		hour_offset_utc=$((hour%24))
+		hour_offset=$((hour_offset_utc + tz_offset))
 
 		cat > "$data_dir/avg/metadata" <<EOF
 human_date='$(date)'
@@ -232,7 +284,7 @@ USAGE:
 OPTIONS
 	-a - average all cached data
 	-c - cache only, don't display anything
-	-b darksky|openweathermap|weatherbit - select backend to use
+	-b darksky|openweathermap|weatherbit|forecast.gov - select backend to use
 	-d <DATA> - add data to the output
 	-f - force redownloading of cached data
 	-p <OPTS> - pass along OPTS to plot(1)
@@ -260,6 +312,7 @@ EOF
 }
 
 backend=darksky
+determine_endpoint_func=""
 force_fetch=""
 cacheonly=""
 average=""
