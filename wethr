@@ -4,8 +4,13 @@ version="0.4.2"
 weather_expiration_secs=3600
 
 die() {
-  printf "$@\n" >&2
+  printf "%s\n" "$*" >&2
   exit 1
+}
+
+load_metadata() {
+  # shellcheck source=/dev/null
+  . "$data_dir/metadata"
 }
 
 next_color() {
@@ -41,9 +46,9 @@ data_source() {
 set_backend_() {
   case $1 in
     darksky)
-      [ -z $DARKSKY_API_KEY ] && die "please set DARKSKY_API_KEY"
-      local params="units=si&lang=en&extend=hourly&exclude=currently,daily,alerts,flags"
-      local api_base="https://api.darksky.net/forecast"
+      [ -z "$DARKSKY_API_KEY" ] && die "please set DARKSKY_API_KEY"
+      params="units=si&lang=en&extend=hourly&exclude=currently,daily,alerts,flags"
+      api_base="https://api.darksky.net/forecast"
       endpoint="${api_base}/${DARKSKY_API_KEY}/${COORDS}?$params"
       jq_extract_date=".hourly.data[0].time"
       jq_normalize='[.hourly.data[] | {
@@ -65,11 +70,14 @@ set_backend_() {
       }]'
       ;;
     openweathermap)
-      [ -z $OWM_API_KEY ] && die "please set OWM_API_KEY"
-      local params="lat=${COORDS%%,*}&lon=${COORDS##*,}&APPID=${OWM_API_KEY}&units=metric"
-      local api_base="https://api.openweathermap.org/data/2.5/forecast"
+      [ -z "$OWM_API_KEY" ] && die "please set OWM_API_KEY"
+      params="lat=${COORDS%%,*}&lon=${COORDS##*,}&APPID=${OWM_API_KEY}&units=metric"
+      api_base="https://api.openweathermap.org/data/2.5/forecast"
       endpoint="$api_base?$params"
       jq_extract_date=".list[0].dt"
+      # Shellcheck thinks the $e below is a shell variable and wants double
+      # quotes.
+      # shellcheck disable=SC2016
       jq_normalize='[.list[] | {
         "hour": (.dt / 3600),
         "feels_like": .main.temp,
@@ -89,9 +97,9 @@ set_backend_() {
       } as $e | [range(3)] | map($e * { "hour": ($e.hour + .) })] | flatten'
       ;;
     weatherbit)
-      [ -z $WEATHERBIT_API_KEY ] && die "please set WEATHERBIT_API_KEY"
-      local params="lat=${COORDS%%,*}&lon=${COORDS##*,}&key=${WEATHERBIT_API_KEY}"
-      local api_base="https://api.weatherbit.io/v2.0/forecast/hourly"
+      [ -z "$WEATHERBIT_API_KEY" ] && die "please set WEATHERBIT_API_KEY"
+      params="lat=${COORDS%%,*}&lon=${COORDS##*,}&key=${WEATHERBIT_API_KEY}"
+      api_base="https://api.weatherbit.io/v2.0/forecast/hourly"
       endpoint="$api_base?$params"
       jq_extract_date=".data[0].ts"
       jq_normalize='[.data[] | {
@@ -147,17 +155,17 @@ calc_tz_offset() {
 
 fetch_weather() {
   last_fetch=0
-  [ -f "$data_dir/metadata" ] && source "$data_dir/metadata"
+  [ -f "$data_dir/metadata" ] && load_metadata
 
   ctime="$(date +%s)"
 
-  if [ $force_fetch ] || [ ! -f "$data_dir/src" ] \
+  if [ "$force_fetch" ] || [ ! -f "$data_dir/src" ] \
     || [ $((ctime - last_fetch)) -gt $weather_expiration_secs ]
   then
     download_ "$endpoint" > "$data_dir/src" || \
       if [ -f "$data_dir/src" ]; then
         printf "failed to fetch new data\n" >&2
-        return;
+        return
       else
         die "couldn't download data"
       fi
@@ -167,7 +175,7 @@ fetch_weather() {
 
     initial_date=$(jq "$jq_extract_date" "$data_dir/src")
 
-    [ -z $initial_date ] && die "failed to extract data"
+    [ -z "$initial_date" ] && die "failed to extract date"
 
     calc_tz_offset
     hour_offset_utc=$(((initial_date % 86400) / 3600))
@@ -183,15 +191,15 @@ EOF
       || die "failed to normalize data"
   fi
 
-  source "$data_dir/metadata"
+  load_metadata
 }
 
 average_() {
-  if [ $force_fetch ]; then
-    rm -r $data_dir/avg/*
+  if [ "$force_fetch" ]; then
+    rm -r "$data_dir/avg"/*
   fi
 
-  [ -f $data_dir/avg/norm ] && return
+  [ -f "$data_dir/avg/norm" ] && return
 
   cat "$data_dir"/*/norm | \
     jq -Mr --slurp '
@@ -206,9 +214,9 @@ average_() {
         | reduce .[] as $e ({}; am(.; $e))
         | with_entries(.value /= $l)
       )
-    ' > $data_dir/avg/norm || die "failed to average data"
+    ' > "$data_dir/avg/norm" || die "failed to average data"
 
-    hour=$(jq '.[0].hour' $data_dir/avg/norm)
+    hour=$(jq '.[0].hour' "$data_dir/avg/norm")
     hour_offset=$(((hour+9)%24))
 
     cat > "$data_dir/avg/metadata" <<EOF
@@ -259,6 +267,7 @@ cacheonly=""
 average=""
 data=""
 plot_args=""
+human_date=""
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/wethr2"
 mkdir -p "$data_dir" || die "failed to create data directory"
 
@@ -295,14 +304,14 @@ while getopts "ab:cd:fhp:" opt; do
 done
 
 COORDS="${COORDS:-}"
-[ -z $COORDS ] && die "please set COORDS"
+[ -z "$COORDS" ] && die "please set COORDS"
 data_dir="$data_dir/$COORDS"
 
 if [ $average ]; then
   mkdir -p "$data_dir/avg"
   average_
   data_dir="$data_dir/avg"
-  source "$data_dir/metadata"
+  load_metadata
   mkdir -p "$data_dir/derived"
 else
   set_backend_ "$backend"
@@ -329,5 +338,8 @@ for d in $data; do
   i=$((i+1))
 done
 
-printf "last fetched: $human_date\n${plot_header% }\n"
+printf "last fetched: %s\n${plot_header% }\n" "$human_date"
+
+# We want plot_args to split
+# shellcheck disable=SC2086
 plot -x 4:$hour_offset:24::l $plot_args
