@@ -6,10 +6,9 @@ Simple command line weather.
 
 - caches weather data (for 1 hour by default).
   + you could even check the weather conditions off-line after caching them
-    once, albeit with accuracy degradation
 - caches the results of jq execution
 - most of the display logic is handled by [plot](https://github.com/annacrombie/plot)
-- POSIX (probably, need to do more testing)
+- POSIX shell (probably, need to do more testing)
 - supports multiple weather backends
   + display average data accross all backends
 
@@ -29,8 +28,6 @@ You must also obtain an api key for the backend you want to use
 - [openweathermap](https://home.openweathermap.org/users/sign_up)
 - [weatherbit](https://www.weatherbit.io/account/create)
 
-DarkSky has more detailed data available for the free tier.
-
 In addition, you need to know your current location in coordinates.
 
 - look it up
@@ -39,17 +36,17 @@ In addition, you need to know your current location in coordinates.
 ## Usage
 
 ```
-wethr 0.4.0
+wethr 0.4.2
 USAGE:
-  wethr [-a|-b<backend>] [-f] [-d<data>[-d<data>[...]]]
+	wethr [-a|-b<backend>] [-f] [-d<data>[-d<data>[...]]]
 
 OPTIONS
-  -a - average all cached data
-  -c - cache only, don't display anything
-  -b darksky|openweathermap|weatherbit - select backend to use
-  -d <DATA> - add data to the output
-  -f - force redownloading of cached data
-  -p <OPTS> - pass along OPTS to plot(1)
+	-a - average all cached data
+	-c - cache only, don't display anything
+	-b darksky|openweathermap|weatherbit - select backend to use
+	-d <DATA> - add data to the output
+	-f - force redownloading of cached data
+	-p <OPTS> - pass along OPTS to plot(1)
 
 DATA:
 clouds, c
@@ -68,6 +65,6 @@ wind_gust, wg
 wind_speed, ws
 
 ENVIRONMENT
-  COORDS - lattitude,longitude
-    coordinates to fetch the weather for
+	COORDS - lattitude,longitude
+		 coordinates to fetch the weather for
 ```
