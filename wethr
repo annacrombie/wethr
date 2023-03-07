@@ -4,240 +4,238 @@ version="0.4.2"
 weather_expiration_secs=3600
 
 die() {
-  printf "%s\n" "$*" >&2
-  exit 1
+	printf "%s\n" "$*" >&2
+	exit 1
 }
 
 load_metadata() {
-  # shellcheck source=/dev/null
-  . "$data_dir/metadata"
+	# shellcheck source=/dev/null
+	. "$data_dir/metadata"
 }
 
 next_color() {
-  case $(($1%5)) in
-    0) color="34 l";;
-    1) color="35 m";;
-    2) color="36 c";;
-    3) color="37 w";;
-    4) color="33 y";;
-  esac
+	case $(($1%5)) in
+	0) color="34 l";;
+	1) color="35 m";;
+	2) color="36 c";;
+	3) color="37 w";;
+	4) color="33 y";;
+	esac
 }
 
 data_source() {
-  case $1 in
-    clouds | c) ds="clouds";;
-    dew_point | dp) ds="dew_point";;
-    feels_like | f) ds="feels_like";;
-    humidity | h) ds="humidity";;
-    ozone | o) ds="ozone";;
-    precip_amnt | pa) ds="precip_amnt";;
-    precip_prob | pp) ds="precip_prob";;
-    pressure | pr) ds="pressure";;
-    temp | t) ds="temp";;
-    uv | u) ds="uv";;
-    visibility | v) ds="visibility";;
-    wind_dir | wd) ds="wind_dir";;
-    wind_gust | wg) ds="wind_gust";;
-    wind_speed | ws) ds="wind_speed";;
-    *) die "invalid data source '$1'";;
-  esac
+	case $1 in
+	clouds | c) ds="clouds";;
+	dew_point | dp) ds="dew_point";;
+	feels_like | f) ds="feels_like";;
+	humidity | h) ds="humidity";;
+	ozone | o) ds="ozone";;
+	precip_amnt | pa) ds="precip_amnt";;
+	precip_prob | pp) ds="precip_prob";;
+	pressure | pr) ds="pressure";;
+	temp | t) ds="temp";;
+	uv | u) ds="uv";;
+	visibility | v) ds="visibility";;
+	wind_dir | wd) ds="wind_dir";;
+	wind_gust | wg) ds="wind_gust";;
+	wind_speed | ws) ds="wind_speed";;
+	*) die "invalid data source '$1'";;
+	esac
 }
 
 set_backend_() {
-  case $1 in
-    darksky)
-      [ -z "$DARKSKY_API_KEY" ] && die "please set DARKSKY_API_KEY"
-      params="units=si&lang=en&extend=hourly&exclude=currently,daily,alerts,flags"
-      api_base="https://api.darksky.net/forecast"
-      endpoint="${api_base}/${DARKSKY_API_KEY}/${COORDS}?$params"
-      jq_extract_date=".hourly.data[0].time"
-      jq_normalize='[.hourly.data[] | {
-        "hour": (.time / 3600),
-        "feels_like": .apparentTemperature,
-        "clouds": (.cloudCover*100),
-        "dew_point": .dewPoint,
-        "humidity": (.humidity*100),
-        "ozone": .ozone,
-        "precip_prob": (.precipProbability*100),
-        "precip_amnt": .precipIntensity,
-        "pressure": .pressure,
-        "temp": .temperature,
-        "uv": .uvIndex,
-        "visibility": .visibility,
-        "wind_dir": .windBearing,
-        "wind_gust": .windGust,
-        "wind_speed": .windSpeed
-      }]'
-      ;;
-    openweathermap)
-      [ -z "$OWM_API_KEY" ] && die "please set OWM_API_KEY"
-      params="lat=${COORDS%%,*}&lon=${COORDS##*,}&APPID=${OWM_API_KEY}&units=metric"
-      api_base="https://api.openweathermap.org/data/2.5/forecast"
-      endpoint="$api_base?$params"
-      jq_extract_date=".list[0].dt"
-      # Shellcheck thinks the $e below is a shell variable and wants double
-      # quotes.
-      # shellcheck disable=SC2016
-      jq_normalize='[.list[] | {
-        "hour": (.dt / 3600),
-        "feels_like": .main.temp,
-        "clouds": .clouds.all,
-        "dew_point": 0,
-        "humidity": .main.humidity,
-        "ozone": 0,
-        "precip_prob": 0,
-        "precip_amnt": .rain."3h",
-        "pressure": .main.pressure,
-        "temp": .main.temp,
-        "uv": 0,
-        "visibility": 0,
-        "wind_dir": .wind.deg,
-        "wind_gust": 0,
-        "wind_speed": .wind.speed
-      } as $e | [range(3)] | map($e * { "hour": ($e.hour + .) })] | flatten'
-      ;;
-    weatherbit)
-      [ -z "$WEATHERBIT_API_KEY" ] && die "please set WEATHERBIT_API_KEY"
-      params="lat=${COORDS%%,*}&lon=${COORDS##*,}&key=${WEATHERBIT_API_KEY}"
-      api_base="https://api.weatherbit.io/v2.0/forecast/hourly"
-      endpoint="$api_base?$params"
-      jq_extract_date=".data[0].ts"
-      jq_normalize='[.data[] | {
-        "hour": (.ts / 3600),
-        "feels_like": .app_temp,
-        "clouds": .clouds,
-        "dew_point": .dewpt,
-        "humidity": .rh,
-        "ozone": .ozone,
-        "precip_prob": .pop,
-        "precip_amnt": .precip,
-        "pressure": .pres,
-        "temp": .temp,
-        "uv": .uv,
-        "visibility": .vis,
-        "wind_dir": .wind_dir,
-        "wind_gust": .wind_gust_spd,
-        "wind_speed": .wind_spd,
-      }]'
-      ;;
-    *)
-      die "invalid backend '$1'"
-      ;;
-  esac
+	case $1 in
+	darksky)
+		[ -z "$DARKSKY_API_KEY" ] && die "please set DARKSKY_API_KEY"
+		params="units=si&lang=en&extend=hourly&exclude=currently,daily,alerts,flags"
+		api_base="https://api.darksky.net/forecast"
+		endpoint="${api_base}/${DARKSKY_API_KEY}/${COORDS}?$params"
+		jq_extract_date=".hourly.data[0].time"
+		jq_normalize='[.hourly.data[] | {
+			"hour": (.time / 3600),
+			"feels_like": .apparentTemperature,
+			"clouds": (.cloudCover*100),
+			"dew_point": .dewPoint,
+			"humidity": (.humidity*100),
+			"ozone": .ozone,
+			"precip_prob": (.precipProbability*100),
+			"precip_amnt": .precipIntensity,
+			"pressure": .pressure,
+			"temp": .temperature,
+			"uv": .uvIndex,
+			"visibility": .visibility,
+			"wind_dir": .windBearing,
+			"wind_gust": .windGust,
+			"wind_speed": .windSpeed
+		}]'
+		;;
+	openweathermap)
+		[ -z "$OWM_API_KEY" ] && die "please set OWM_API_KEY"
+		params="lat=${COORDS%%,*}&lon=${COORDS##*,}&APPID=${OWM_API_KEY}&units=metric"
+		api_base="https://api.openweathermap.org/data/2.5/forecast"
+		endpoint="$api_base?$params"
+		jq_extract_date=".list[0].dt"
+		# Shellcheck thinks the $e below is a shell variable and wants double
+		# quotes.
+		# shellcheck disable=SC2016
+		jq_normalize='[.list[] | {
+			"hour": (.dt / 3600),
+			"feels_like": .main.temp,
+			"clouds": .clouds.all,
+			"dew_point": 0,
+			"humidity": .main.humidity,
+			"ozone": 0,
+			"precip_prob": 0,
+			"precip_amnt": .rain."3h",
+			"pressure": .main.pressure,
+			"temp": .main.temp,
+			"uv": 0,
+			"visibility": 0,
+			"wind_dir": .wind.deg,
+			"wind_gust": 0,
+			"wind_speed": .wind.speed
+		} as $e | [range(3)] | map($e * { "hour": ($e.hour + .) })] | flatten'
+		;;
+	weatherbit)
+		[ -z "$WEATHERBIT_API_KEY" ] && die "please set WEATHERBIT_API_KEY"
+		params="lat=${COORDS%%,*}&lon=${COORDS##*,}&key=${WEATHERBIT_API_KEY}"
+		api_base="https://api.weatherbit.io/v2.0/forecast/hourly"
+		endpoint="$api_base?$params"
+		jq_extract_date=".data[0].ts"
+		jq_normalize='[.data[] | {
+			"hour": (.ts / 3600),
+			"feels_like": .app_temp,
+			"clouds": .clouds,
+			"dew_point": .dewpt,
+			"humidity": .rh,
+			"ozone": .ozone,
+			"precip_prob": .pop,
+			"precip_amnt": .precip,
+			"pressure": .pres,
+			"temp": .temp,
+			"uv": .uv,
+			"visibility": .vis,
+			"wind_dir": .wind_dir,
+			"wind_gust": .wind_gust_spd,
+			"wind_speed": .wind_spd,
+		}]'
+		;;
+	*)
+		die "invalid backend '$1'"
+		;;
+	esac
 }
 
 download_() {
-  if command -v curl >/dev/null
-  then
-    curl --compressed -sS "$@"
-  elif command -v wget >/dev/null
-  then
-    wget --compression=auto -qO - "$@"
-  else
-    die "failed to fetch files: no supported downloader installed"
-  fi
+	if command -v curl >/dev/null; then
+		curl --compressed -sS "$@"
+	elif command -v wget >/dev/null; then
+		wget --compression=auto -qO - "$@"
+	else
+		die "failed to fetch files: no supported downloader installed"
+	fi
 }
 
 calc_tz_offset() {
-    # we have to manually remove padding zeroes so the number isn't
-    # accidentally interpreted as octal.
-    tz_offset="$(date +%z)"
-    if [ "${tz_offset#-}" != "$tz_offset" ]; then
-        sign="-"
-        tz_offset=${tz_offset#-}
-    else
-        sign="+"
-        tz_offset=${tz_offset#+}
-    fi
-    tz_offset="${sign}${tz_offset#0}"
-    tz_offset="$(((tz_offset+0)/100))"
+		# we have to manually remove padding zeroes so the number isn't
+		# accidentally interpreted as octal.
+		tz_offset="$(date +%z)"
+		if [ "${tz_offset#-}" != "$tz_offset" ]; then
+				sign="-"
+				tz_offset=${tz_offset#-}
+		else
+				sign="+"
+				tz_offset=${tz_offset#+}
+		fi
+		tz_offset="${sign}${tz_offset#0}"
+		tz_offset="$(((tz_offset+0)/100))"
 }
 
 fetch_weather() {
-  last_fetch=0
-  [ -f "$data_dir/metadata" ] && load_metadata
+	last_fetch=0
+	[ -f "$data_dir/metadata" ] && load_metadata
 
-  ctime="$(date +%s)"
+	ctime="$(date +%s)"
 
-  if [ "$force_fetch" ] || [ ! -f "$data_dir/src" ] \
-    || [ $((ctime - last_fetch)) -gt $weather_expiration_secs ]
-  then
-    download_ "$endpoint" > "$data_dir/src" || \
-      if [ -f "$data_dir/src" ]; then
-        printf "failed to fetch new data\n" >&2
-        return
-      else
-        die "couldn't download data"
-      fi
+	if [ "$force_fetch" ] \
+		|| [ ! -f "$data_dir/src" ] \
+		|| [ $((ctime - last_fetch)) -gt $weather_expiration_secs ]; then
+		download_ "$endpoint" > "$data_dir/src" || \
+			if [ -f "$data_dir/src" ]; then
+				printf "failed to fetch new data\n" >&2
+				return
+			else
+				die "couldn't download data"
+			fi
 
-    [ -d "$data_dir/derived" ] && rm -r "$data_dir/derived"
-    mkdir -p "$data_dir/derived"
+		[ -d "$data_dir/derived" ] && rm -r "$data_dir/derived"
+		mkdir -p "$data_dir/derived"
 
-    initial_date=$(jq "$jq_extract_date" "$data_dir/src")
+		initial_date=$(jq "$jq_extract_date" "$data_dir/src")
 
-    [ -z "$initial_date" ] && die "failed to extract date"
+		[ -z "$initial_date" ] && die "failed to extract date"
 
-    calc_tz_offset
-    hour_offset_utc=$(((initial_date % 86400) / 3600))
-    hour_offset=$((hour_offset_utc + tz_offset))
+		calc_tz_offset
+		hour_offset_utc=$(((initial_date % 86400) / 3600))
+		hour_offset=$((hour_offset_utc + tz_offset))
 
-    cat > "$data_dir/metadata" <<EOF
+		cat > "$data_dir/metadata" <<EOF
 last_fetch=$ctime
 human_date='$(date)'
 hour_offset=$hour_offset
 EOF
 
-    jq "$jq_normalize" "$data_dir/src" > "$data_dir/norm" \
-      || die "failed to normalize data"
-  fi
+		jq "$jq_normalize" "$data_dir/src" > "$data_dir/norm" \
+			|| die "failed to normalize data"
+	fi
 
-  load_metadata
+	load_metadata
 }
 
 average_() {
-  if [ "$force_fetch" ]; then
-    rm -r "$data_dir/avg"/*
-  fi
+	if [ "$force_fetch" ]; then
+		rm -r "$data_dir/avg"/*
+	fi
 
-  [ -f "$data_dir/avg/norm" ] && return
+	[ -f "$data_dir/avg/norm" ] && return
 
-  cat "$data_dir"/*/norm | \
-    jq -Mr --slurp '
-    def am(a; b):
-      a as $a
-        | b | with_entries(. as $e | .value += ($a[$e.key] // 0));
+	cat "$data_dir"/*/norm | \
+		jq -Mr --slurp '
+		def am(a; b):
+			a as $a
+				| b | with_entries(. as $e | .value += ($a[$e.key] // 0));
 
-    flatten
-      | group_by(.hour)
-      | map(
-        length as $l
-        | reduce .[] as $e ({}; am(.; $e))
-        | with_entries(.value /= $l)
-      )
-    ' > "$data_dir/avg/norm" || die "failed to average data"
+		flatten
+			| group_by(.hour)
+			| map(
+				length as $l
+				| reduce .[] as $e ({}; am(.; $e))
+				| with_entries(.value /= $l)
+			)
+		' > "$data_dir/avg/norm" || die "failed to average data"
 
-    hour=$(jq '.[0].hour' "$data_dir/avg/norm")
-    hour_offset=$(((hour+9)%24))
+		hour=$(jq '.[0].hour' "$data_dir/avg/norm")
+		hour_offset=$(((hour+9)%24))
 
-    cat > "$data_dir/avg/metadata" <<EOF
+		cat > "$data_dir/avg/metadata" <<EOF
 human_date='$(date)'
 hour_offset=$hour_offset
 EOF
 }
 
 print_usage() {
-  cat <<EOF
+	cat <<EOF
 wethr $version
 USAGE:
-  wethr [-a|-b<backend>] [-f] [-d<data>[-d<data>[...]]]
+	wethr [-a|-b<backend>] [-f] [-d<data>[-d<data>[...]]]
 
 OPTIONS
-  -a - average all cached data
-  -c - cache only, don't display anything
-  -b darksky|openweathermap|weatherbit - select backend to use
-  -d <DATA> - add data to the output
-  -f - force redownloading of cached data
-  -p <OPTS> - pass along OPTS to plot(1)
+	-a - average all cached data
+	-c - cache only, don't display anything
+	-b darksky|openweathermap|weatherbit - select backend to use
+	-d <DATA> - add data to the output
+	-f - force redownloading of cached data
+	-p <OPTS> - pass along OPTS to plot(1)
 
 DATA:
 clouds, c
@@ -256,8 +254,8 @@ wind_gust, wg
 wind_speed, ws
 
 ENVIRONMENT
-  COORDS - lattitude,longitude
-    coordinates to fetch the weather for
+	COORDS - lattitude,longitude
+		 coordinates to fetch the weather for
 EOF
 }
 
@@ -272,35 +270,35 @@ data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/wethr2"
 mkdir -p "$data_dir" || die "failed to create data directory"
 
 while getopts "ab:cd:fhp:" opt; do
-  case $opt in
-    a)
-      average=1
-      ;;
-    b)
-      backend="$OPTARG"
-      ;;
-    c)
-      cacheonly=1
-      ;;
-    d)
-      data_source "$OPTARG"
-      data="$ds $data"
-      ;;
-    f)
-      force_fetch=1
-      ;;
-    h)
-      print_usage
-      exit
-      ;;
-    p)
-      plot_args="$plot_args -${OPTARG##-}"
-      ;;
-    ?)
-      print_usage
-      exit 1
-      ;;
-  esac
+	case $opt in
+	a)
+		average=1
+		;;
+	b)
+		backend="$OPTARG"
+		;;
+	c)
+		cacheonly=1
+		;;
+	d)
+		data_source "$OPTARG"
+		data="$ds $data"
+		;;
+	f)
+		force_fetch=1
+		;;
+	h)
+		print_usage
+		exit
+		;;
+	p)
+		plot_args="$plot_args -${OPTARG##-}"
+		;;
+	?)
+		print_usage
+		exit 1
+		;;
+	esac
 done
 
 COORDS="${COORDS:-}"
@@ -308,16 +306,16 @@ COORDS="${COORDS:-}"
 data_dir="$data_dir/$COORDS"
 
 if [ $average ]; then
-  mkdir -p "$data_dir/avg"
-  average_
-  data_dir="$data_dir/avg"
-  load_metadata
-  mkdir -p "$data_dir/derived"
+	mkdir -p "$data_dir/avg"
+	average_
+	data_dir="$data_dir/avg"
+	load_metadata
+	mkdir -p "$data_dir/derived"
 else
-  set_backend_ "$backend"
-  data_dir="$data_dir/$backend"
-  mkdir -p "$data_dir"
-  fetch_weather
+	set_backend_ "$backend"
+	data_dir="$data_dir/$backend"
+	mkdir -p "$data_dir"
+	fetch_weather
 fi
 
 [ $cacheonly ] && exit
@@ -327,15 +325,15 @@ data=${data:-temp}
 plot_header=""
 i=0
 for d in $data; do
-  f="$data_dir/derived/$d"
+	f="$data_dir/derived/$d"
 
-  [ -f "$f" ] || jq -Mr "map(.$d)" "$data_dir/norm" > "$f"
+	[ -f "$f" ] || jq -Mr "map(.$d)" "$data_dir/norm" > "$f"
 
-  next_color $i
-  plot_args="$plot_args -c${color#* } -i$f"
-  plot_header="\033[${color% *}m$d\033[0m $plot_header"
+	next_color $i
+	plot_args="$plot_args -c${color#* } -i$f"
+	plot_header="\033[${color% *}m$d\033[0m $plot_header"
 
-  i=$((i+1))
+	i=$((i+1))
 done
 
 printf "last fetched: %s\n${plot_header% }\n" "$human_date"
