@@ -1,6 +1,6 @@
 #!/bin/sh -eu
 
-version="0.4.1"
+version="0.4.2"
 weather_expiration_secs=3600
 
 die() {
@@ -130,6 +130,21 @@ download_() {
   fi
 }
 
+calc_tz_offset() {
+    # we have to manually remove padding zeroes so the number isn't
+    # accidentally interpreted as octal.
+    tz_offset="$(date +%z)"
+    if [ "${tz_offset#-}" != "$tz_offset" ]; then
+        sign="-"
+        tz_offset=${tz_offset#-}
+    else
+        sign="+"
+        tz_offset=${tz_offset#+}
+    fi
+    tz_offset="${sign}${tz_offset#0}"
+    tz_offset="$(((tz_offset+0)/100))"
+}
+
 fetch_weather() {
   last_fetch=0
   [ -f "$data_dir/metadata" ] && source "$data_dir/metadata"
@@ -154,7 +169,9 @@ fetch_weather() {
 
     [ -z $initial_date ] && die "failed to extract data"
 
-    hour_offset=$(((($initial_date/3600)+9)%24))
+    calc_tz_offset
+    hour_offset_utc=$(((initial_date % 86400) / 3600))
+    hour_offset=$((hour_offset_utc + tz_offset))
 
     cat > "$data_dir/metadata" <<EOF
 last_fetch=$ctime
